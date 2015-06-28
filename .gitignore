@@ -59,3 +59,4 @@ target/
 
 # Sublime Text
 *.sublime-*
+settings.py
