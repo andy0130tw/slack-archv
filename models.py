@@ -55,8 +55,8 @@ class User(ModelBase):
         raw = resp.copy()
         user = {
             'name_data': {},
-            'timezone': raw['tz'],
-            'realname': raw['real_name'],
+            'timezone': raw.get('tz', None),
+            'realname': raw.get('real_name', None),
             'avatar': raw['profile'].get('image_original', raw['profile'].get('image_192', None)),
             'avatar_data': {key: val for key, val in raw['profile'].items() if key.find('image_') == 0}
         }
