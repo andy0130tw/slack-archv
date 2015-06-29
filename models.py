@@ -12,7 +12,6 @@ class SlackIDField(CharField):
 
 class JSONField(TextField):
     '''Field for storing stringified-JSON'''
-    db_field = 'text'
     def db_value(self, value):
         if (isinstance(value, dict) or isinstance(value, list)) and len(value) == 0:
             return None
@@ -20,6 +19,10 @@ class JSONField(TextField):
 
     def python_value(self, value):
         return json.loads(value)
+
+# class TimestampField(DateTimeField):
+#     '''Field for ts; only for setting format'''
+#     formats = '%Y-%m-%d %H:%M:%S.%f'
 
 class ModelBase(Model):
     '''Super class for basic models'''
@@ -97,6 +100,15 @@ class ModelSlackMessageList(ModelBase):
     archived = BooleanField(null=True)
     topic = JSONField()
     purpose = JSONField()
+
+    @classmethod
+    def api(Class, resp):
+        msglist = resp.copy()
+        msglist['archived'] = msglist['is_archived']
+        del msglist['is_archived']
+        # todo: mark general in information
+        # todo: also add members
+        return Class.create(**msglist)
 
 class Channel(ModelSlackMessageList):
     pass

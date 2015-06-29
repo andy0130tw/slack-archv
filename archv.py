@@ -9,7 +9,7 @@ import models as m
 
 token = settings.token
 slack = slacker.Slacker(token)
-pp = PrettyPrinter(indent=2)
+pp = PrettyPrinter(indent=2).pprint
 
 def assert_auth():
     try:
@@ -30,11 +30,18 @@ def main():
     print('Fetching Authentication info...')
     auth_resp = assert_auth()
     if auth_resp:
-        pp.pprint(auth_resp)
+        pp(auth_resp)
     else:
         return
 
     print('Initializating database...')
     init()
+
+    print('Fetching Channel List...')
+    channel_list = slack.channels.list().body['channels']
+    with m.db.atomic():
+        m.Channel.delete().execute()
+        for channel in channel_list:
+            m.Channel.api(channel)
 
 main()
