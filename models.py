@@ -103,10 +103,15 @@ class ModelSlackMessageList(ModelBase):
         self.id = raw['id']
         self.name = raw['name']
         self.created = raw['created']
-        self.creator = raw['creator']
+        try:
+            self.creator = User.get(User.id == raw['creator'])
+        except User.DoesNotExist:
+            pass
+
         self.archived = raw['is_archived']
         self.topic = raw['topic']
         self.purpose = raw['purpose']
+        self.save()
 
 
 class Channel(ModelSlackMessageList):

@@ -80,9 +80,9 @@ def test():
         chanlist = m.Channel.select()
     print('Total # of channels:', chanlist.count())
     for chan in chanlist:
-            print(chan.name)
+            print(chan.name, ':', chan.creator.name)
 
 if __name__ == '__main__':
 #    main()
-    fetch_channel_list()
+#    fetch_channel_list()
     test()
