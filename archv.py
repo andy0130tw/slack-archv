@@ -32,6 +32,19 @@ def fetch_user_list():
                 pass
             m.User.api(slack.users.info(usr['id']).body['user'])
 
+def fetch_channel_list():
+    ''' This is a method updating channel list.
+    '''
+    chanlist = slack.channels.list().body['channels']
+    with m.db.atomic():
+        for chan in chanlist:
+            try:
+                insta = m.Channel.get(m.Channel.id == chan['id'])
+                print('Channel {} found. Updating...'.format(insta.name))
+            except m.Channel.DoesNotExist:
+                insta = m.Channel.create(**chan)
+            insta.update_with_raw(raw = chan)
+
 def init():
     with m.db.atomic():
         m.init_models()
@@ -51,12 +64,25 @@ def main():
 
     print('Initializating database...')
     init()
-    print('Fetching User list...')
-    fetch_user_list()
+#    print('Fetching User list...')
+#    fetch_user_list()
+    print('Fetching Channel list...')
+    fetch_channel_list()
 
 def test():
-    sp = m.User.get(m.User.name == 'daydreamer')
-    print(sp.email)
+    with m.db.atomic():
+        usrlist = m.User.select()
 
-main()
-test()
+    print('Total # of User:', usrlist.count())
+    for usr in usrlist:
+            print(usr.name)
+    with m.db.atomic():
+        chanlist = m.Channel.select()
+    print('Total # of channels:', chanlist.count())
+    for chan in chanlist:
+            print(chan.name)
+
+if __name__ == '__main__':
+#    main()
+    fetch_channel_list()
+    test()
