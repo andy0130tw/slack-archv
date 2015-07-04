@@ -45,6 +45,16 @@ def fetch_channel_list():
                 insta = m.Channel.create(**chan)
             insta.update_with_raw(raw = chan)
 
+            # Updating linking of Users and Channels.
+
+            for usr in chan['members']:
+                try:
+                    usrref = m.User.get(m.User.id == usr)
+                except m.User.DoesNotExist:
+                    m.User.api(slack.users.info(usr).body['user'])
+
+                link, created = m.ChannelUser.get_or_create(channel = insta, user = usrref)
+
 def init():
     with m.db.atomic():
         m.init_models()
@@ -64,8 +74,8 @@ def main():
 
     print('Initializating database...')
     init()
-#    print('Fetching User list...')
-#    fetch_user_list()
+    print('Fetching User list...')
+    fetch_user_list()
     print('Fetching Channel list...')
     fetch_channel_list()
 
@@ -80,9 +90,8 @@ def test():
         chanlist = m.Channel.select()
     print('Total # of channels:', chanlist.count())
     for chan in chanlist:
-            print(chan.name, ':', chan.creator.name)
+        print(chan.name, ':', chan.creator.name)
 
 if __name__ == '__main__':
 #    main()
-#    fetch_channel_list()
     test()
