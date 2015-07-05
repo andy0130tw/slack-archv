@@ -93,7 +93,8 @@ class DirectMessage(ModelBase):
 
 class ModelSlackMessageList(ModelBase):
     '''as a super class of channels and groups'''
-    id = CharField(index=True, unique=True, primary_key=True)
+
+    id = SlackIDField(index=True, unique=True, primary_key=True)
     name = CharField()
     created = DateTimeField()
     creator = ForeignKeyField(User)
@@ -101,14 +102,19 @@ class ModelSlackMessageList(ModelBase):
     topic = JSONField()
     purpose = JSONField()
 
-    @classmethod
-    def api(Class, resp):
-        msglist = resp.copy()
-        msglist['archived'] = msglist['is_archived']
-        del msglist['is_archived']
-        # todo: mark general in information
-        # todo: also add members
-        return Class.create(**msglist)
+    def update_with_raw(self, raw):
+        self.id = raw['id']
+        self.name = raw['name']
+        self.created = raw['created']
+        try:
+            self.creator = User.get(User.id == raw['creator'])
+        except User.DoesNotExist:
+            pass
+
+        self.archived = raw['is_archived']
+        self.topic = raw['topic']
+        self.purpose = raw['purpose']
+        self.save()
 
 class Channel(ModelSlackMessageList):
     pass

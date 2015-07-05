@@ -60,3 +60,6 @@ target/
 # Sublime Text
 *.sublime-*
 settings.py
+
+# Sqlite file
+*.sqlite
