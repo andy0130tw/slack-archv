@@ -67,12 +67,14 @@ def init():
 def main():
     print('Fetching Authentication info...')
     auth_resp = assert_auth()
-    if auth_resp:
-        pp(auth_resp)
-    else:
-        return
+    del auth_resp['ok']
 
-    print('Initializating database...')
+    # todo: warn if user use a different database to backup
+    with m.db.atomic():
+        for prop in auth_resp:
+            m.Information.create(key=prop, value=auth_resp[prop]).save()
+
+    print('Initializing database...')
     init()
     print('Fetching User list...')
     fetch_user_list()
@@ -82,16 +84,15 @@ def main():
 def test():
     with m.db.atomic():
         usrlist = m.User.select()
+        print('Total # of User:', usrlist.count())
+        for usr in usrlist:
+                print(usr.name)
 
-    print('Total # of User:', usrlist.count())
-    for usr in usrlist:
-            print(usr.name)
-    with m.db.atomic():
         chanlist = m.Channel.select()
-    print('Total # of channels:', chanlist.count())
-    for chan in chanlist:
-        print(chan.name, ':', chan.creator.name)
+        print('Total # of channels:', chanlist.count())
+        for chan in chanlist:
+            print(chan.name, ':', chan.creator.name)
 
 if __name__ == '__main__':
-#    main()
-    test()
+    main()
+    # test()
