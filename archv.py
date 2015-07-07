@@ -67,15 +67,17 @@ def init():
 def main():
     print('Fetching Authentication info...')
     auth_resp = assert_auth()
-    del auth_resp['ok']
 
+    print('Initializing database...')
+    init()
+
+    print('Inserting team metadata...')
+    del auth_resp['ok']
     # todo: warn if user use a different database to backup
     with m.db.atomic():
         for prop in auth_resp:
             m.Information.create(key=prop, value=auth_resp[prop]).save()
 
-    print('Initializing database...')
-    init()
     print('Fetching User list...')
     fetch_user_list()
     print('Fetching Channel list...')
