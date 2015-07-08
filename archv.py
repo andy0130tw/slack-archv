@@ -25,6 +25,7 @@ def fetch_user_list():
         usrlist = slack.users.list().body['members']
         for usr in usrlist:
             try:
+                # todo: use get_or_create instead
                 insta = m.User.get(m.User.id == usr['id'])
                 print('User {} found. Updating....'.format(insta.name))
                 insta.delete_instance()
@@ -33,8 +34,7 @@ def fetch_user_list():
             m.User.api(slack.users.info(usr['id']).body['user'])
 
 def fetch_channel_list():
-    ''' This is a method updating channel list.
-    '''
+    ''' This is a method updating channel list. '''
     chanlist = slack.channels.list().body['channels']
     with m.db.atomic():
         for chan in chanlist:
@@ -90,7 +90,9 @@ def main():
     # todo: warn if user use a different database to backup
     with m.db.atomic():
         for prop in auth_resp:
-            m.Information.create(key=prop, value=auth_resp[prop]).save()
+            meta, _ = m.Information.get_or_create(key=prop, value=auth_resp[prop])
+            if prop == 'team_id' and meta.value != auth_resp['team_id']:
+                print(' Warning: Team ID is inconsistent.')
 
     print('Fetching User list...')
     fetch_user_list()
