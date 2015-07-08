@@ -101,6 +101,7 @@ class ModelSlackMessageList(ModelBase):
     archived = BooleanField(null=True)
     topic = JSONField()
     purpose = JSONField()
+    latest = DateTimeField()
 
     def update_with_raw(self, raw):
         self.id = raw['id']
