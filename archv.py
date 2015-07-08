@@ -56,7 +56,8 @@ def fetch_channel_list():
                 link, created = m.ChannelUser.get_or_create(channel = insta, user = usrref)
 
 def fetch_channel_message(channel):
-    try:
+    # Warning: Unfinished part.
+   '''' try:
         chan = m.Channel.get(m.Channel.name == channel)
     except m.Channel.DoesNotExist:
         raise m.Channel.DoesNotExist('Channel \'{}\' does not exist.'.format(channel))
@@ -66,9 +67,9 @@ def fetch_channel_message(channel):
     except m.Message.DoesNotExist:
         raise
     resp = slack.channels.history().body
-    while resp['has_more']:
-
-
+    # while resp['has_more']:
+    #    pass
+'''
 def init():
     with m.db.atomic():
         m.init_models()
