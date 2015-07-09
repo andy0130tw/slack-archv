@@ -31,6 +31,7 @@ def fetch_user_list():
                 insta.delete_instance()
             except m.User.DoesNotExist:
                 pass
+            print('Creating user {}'.format(usr['name']))
             m.User.api(slack.users.info(usr['id']).body['user'])
 
 def fetch_channel_list():
@@ -46,7 +47,6 @@ def fetch_channel_list():
             insta.update_with_raw(raw = chan)
 
             # Updating linking of Users and Channels.
-
             for usr in chan['members']:
                 try:
                     usrref = m.User.get(m.User.id == usr)
@@ -82,6 +82,7 @@ def init():
 def main():
     print('Fetching Authentication info...')
     auth_resp = assert_auth()
+    pp(auth_resp)
 
     print('Initializing database...')
     init()
