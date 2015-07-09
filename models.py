@@ -35,7 +35,7 @@ class Information(ModelBase):
     value = CharField(null=True)
 
 class User(ModelBase):
-    id = SlackIDField(index=True, primary_key=True)
+    id = SlackIDField(primary_key=True)
     name = CharField(null=True)
     realname = CharField(null=True)
     name_data = JSONField(null=True)
@@ -70,14 +70,15 @@ class User(ModelBase):
         for key in ['first_name', 'last_name', 'real_name_normalized']:
             user['name_data'][key] = raw['profile'].get(key, None)
 
-        #todo: remove more used keys
+        # todo: remove more used keys
         del raw['profile']
         user['raw'] = raw
 
         return Class.create(**user)
 
 class File(ModelBase):
-    id = SlackIDField(index=True, primary_key=True)
+    id = SlackIDField(primary_key=True)
+    # todo: add more fields and file content
 
 class Attachment(ModelBase):
     id = PrimaryKeyField()
@@ -94,7 +95,7 @@ class DirectMessage(ModelBase):
 class ModelSlackMessageList(ModelBase):
     '''as a super class of channels and groups'''
 
-    id = SlackIDField(index=True, unique=True, primary_key=True)
+    id = SlackIDField(primary_key=True)
     name = CharField()
     created = DateTimeField()
     creator = ForeignKeyField(User)
@@ -125,7 +126,7 @@ class Group(ModelSlackMessageList):
 
 
 class Message(ModelBase):
-    id = SlackIDField(index=True, primary_key=True)
+    id = SlackIDField(primary_key=True)
     channel = ForeignKeyField(Channel)
     # if null, message is the real message of a user
     #  otherwise it should be only a hint describing raw
