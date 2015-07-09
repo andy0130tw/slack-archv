@@ -5,6 +5,11 @@ from peewee import *
 
 db = SqliteDatabase('slack-archv-test.sqlite')
 
+def copy_keys(a, b, args):
+    for key in args:
+        a[key] = b.get(key, None)
+    return a
+
 class SlackIDField(CharField):
     '''Field for storing Slack-generated IDs, usually 9 digits.
         Expected to be primary keys'''
@@ -26,6 +31,24 @@ class JSONField(TextField):
 
 class ModelBase(Model):
     '''Super class for basic models'''
+    # transform first upon creation
+    @classmethod
+    def api(cls, resp):
+        try:
+            data = cls._transform(resp)
+        except AttributeError:
+            data = resp
+        return cls.create(**data)
+    # transform first before bulk insertion
+    @classmethod
+    def api_insert_many(cls, rows):
+        try:
+            trans = cls._transform
+            new_rows = [ trans(row) for row in rows ]
+        except AttributeError:
+            new_rows = rows
+        return cls.insert_many(new_rows)
+
     class Meta:
         database = db
 
@@ -53,8 +76,7 @@ class User(ModelBase):
     raw = JSONField(null=True)
 
     @classmethod
-    def api(Class, resp):
-        '''Transform data from API response.'''
+    def _transform(cls, resp):
         raw = resp.copy()
         user = {
             'name_data': {},
@@ -63,18 +85,23 @@ class User(ModelBase):
             'avatar': raw['profile'].get('image_original', raw['profile'].get('image_192', None)),
             'avatar_data': {key: val for key, val in raw['profile'].items() if key.find('image_') == 0}
         }
-        for key in ['id', 'deleted', 'name', 'is_admin', 'is_owner', 'is_bot']:
-            user[key] = raw.get(key, None)
-        for key in ['email', 'skype', 'phone', 'title']:
-            user[key] = raw['profile'].get(key, None)
-        for key in ['first_name', 'last_name', 'real_name_normalized']:
-            user['name_data'][key] = raw['profile'].get(key, None)
+
+        copy_keys(user, raw, ['id', 'deleted', 'name', 'is_admin', 'is_owner', 'is_bot'])
+        copy_keys(user, raw['profile'], ['email', 'skype', 'phone', 'title'])
+        copy_keys(user['name_data'], raw['profile'], ['first_name', 'last_name', 'real_name_normalized'])
 
         # todo: remove more used keys
         del raw['profile']
         user['raw'] = raw
 
-        return Class.create(**user)
+        return user
+
+    @classmethod
+    def getByID(cls, id):
+        try:
+            return cls.get(cls.id == id)
+        except cls.DoesNotExist:
+            return None
 
 class File(ModelBase):
     id = SlackIDField(primary_key=True)
@@ -102,21 +129,21 @@ class ModelSlackMessageList(ModelBase):
     archived = BooleanField(null=True)
     topic = JSONField()
     purpose = JSONField()
-    latest = DateTimeField()
+    # latest = DateTimeField()
 
-    def update_with_raw(self, raw):
-        self.id = raw['id']
-        self.name = raw['name']
-        self.created = raw['created']
+    @classmethod
+    def getByID(cls, id):
         try:
-            self.creator = User.get(User.id == raw['creator'])
-        except User.DoesNotExist:
-            pass
+            return cls.get(cls.id == id)
+        except cls.DoesNotExist:
+            return None
 
-        self.archived = raw['is_archived']
-        self.topic = raw['topic']
-        self.purpose = raw['purpose']
-        self.save()
+    @classmethod
+    def _transform(cls, resp):
+        msglist = {
+            'archived': resp['is_archived']
+        }
+        return copy_keys(msglist, resp, ['id', 'name', 'created', 'creator', 'topic', 'purpose'])
 
 class Channel(ModelSlackMessageList):
     pass

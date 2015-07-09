@@ -19,41 +19,39 @@ def assert_auth():
 
 def fetch_user_list():
     ''' This is a method to fetch user list.
-        Updating if finding the user in the Database.
-        Implemented in dirty ways '''
+        Clear the list first. '''
     with m.db.atomic():
         usrlist = slack.users.list().body['members']
-        for usr in usrlist:
-            try:
-                # todo: use get_or_create instead
-                insta = m.User.get(m.User.id == usr['id'])
-                print('User {} found. Updating....'.format(insta.name))
-                insta.delete_instance()
-            except m.User.DoesNotExist:
-                pass
-            print('Creating user {}'.format(usr['name']))
-            m.User.api(slack.users.info(usr['id']).body['user'])
+        m.User.delete().execute()
+        m.User.api_insert_many(usrlist).execute()
+        # for usr in usrlist:
+        #     # todo: use get_or_create instead
+        #     insta = m.User.getByID(usr['id'])
+        #     if insta:
+        #         print('User {} found. Updating....'.format(insta.name))
+        #         insta.delete_instance()
+        #     else:
+        #         print('Creating user {}'.format(usr['name']))
+        #     m.User.api(slack.users.info(usr['id']).body['user']).save()
 
 def fetch_channel_list():
     ''' This is a method updating channel list. '''
     chanlist = slack.channels.list().body['channels']
     with m.db.atomic():
-        for chan in chanlist:
-            try:
-                insta = m.Channel.get(m.Channel.id == chan['id'])
-                print('Channel {} found. Updating...'.format(insta.name))
-            except m.Channel.DoesNotExist:
-                insta = m.Channel.create(**chan)
-            insta.update_with_raw(raw = chan)
+        m.Channel.delete().execute()
+        m.Channel.api_insert_many(chanlist).execute()
+        # for chan in chanlist:
+        #     insta = m.Channel.getByID(chan['id']) or m.Channel.create(**chan)
+        #     insta.update_with_raw(raw = chan)
 
-            # Updating linking of Users and Channels.
-            for usr in chan['members']:
-                try:
-                    usrref = m.User.get(m.User.id == usr)
-                except m.User.DoesNotExist:
-                    m.User.api(slack.users.info(usr).body['user'])
+        #     # Updating linking of Users and Channels.
+        #     for usr in chan['members']:
+        #         try:
+        #             usrref = m.User.get(m.User.id == usr)
+        #         except m.User.DoesNotExist:
+        #             m.User.api(slack.users.info(usr).body['user'])
 
-                link, created = m.ChannelUser.get_or_create(channel = insta, user = usrref)
+        #         link, created = m.ChannelUser.get_or_create(channel = insta, user = usrref)
 
 def fetch_channel_message(channel):
     # Warning: Unfinished part.
@@ -75,7 +73,8 @@ def init():
         m.init_models()
         # Add Slackbot to user list
         try:
-            m.User.api(slack.users.info(user='USLACKBOT').body['user'])
+            slackbot = slack.users.info(user='USLACKBOT').body['user']
+            m.User.api(slackbot).save()
         except peewee.IntegrityError:
             pass
 
@@ -106,7 +105,7 @@ def test():
         usrlist = m.User.select()
         print('Total # of User:', usrlist.count())
         for usr in usrlist:
-                print(usr.name)
+            print(usr.name)
 
         chanlist = m.Channel.select()
         print('Total # of channels:', chanlist.count())
