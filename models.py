@@ -10,6 +10,12 @@ def copy_keys(a, b, args):
         a[key] = b.get(key, None)
     return a
 
+def del_keys(d, args):
+    for key in args:
+        if key in d:
+            del d[key]
+    return d
+
 class SlackIDField(CharField):
     '''Field for storing Slack-generated IDs, usually 9 digits.
         Expected to be primary keys'''
@@ -18,7 +24,8 @@ class SlackIDField(CharField):
 class JSONField(TextField):
     '''Field for storing stringified-JSON'''
     def db_value(self, value):
-        if (isinstance(value, dict) or isinstance(value, list)) and len(value) == 0:
+        if ((isinstance(value, dict) or isinstance(value, list)) and len(value) == 0
+            or value is None):
             return None
         return json.dumps(value, ensure_ascii=False)
 
@@ -38,7 +45,8 @@ class ModelBase(Model):
             data = cls._transform(resp)
         except AttributeError:
             data = resp
-        return cls.create(**data)
+        return cls(**data)
+
     # transform first before bulk insertion
     @classmethod
     def api_insert_many(cls, rows):
@@ -76,6 +84,13 @@ class User(ModelBase):
     raw = JSONField(null=True)
 
     @classmethod
+    def getByID(cls, id):
+        try:
+            return cls.get(cls.id == id)
+        except cls.DoesNotExist:
+            return None
+
+    @classmethod
     def _transform(cls, resp):
         raw = resp.copy()
         user = {
@@ -96,20 +111,46 @@ class User(ModelBase):
 
         return user
 
-    @classmethod
-    def getByID(cls, id):
-        try:
-            return cls.get(cls.id == id)
-        except cls.DoesNotExist:
-            return None
-
 class File(ModelBase):
     id = SlackIDField(primary_key=True)
-    # todo: add more fields and file content
+    # todo: add more fields
+    permalink = TextField()
+    raw = JSONField(null=True)
+    content = BlobField(null=True)
+
+    @classmethod
+    def _transform(cls, resp):
+        # unfinished part...
+        raw = resp.copy()
+        _file = {
+            'raw': raw
+        }
+        intact_keys = ['id', 'permalink']
+        copy_keys(_file, raw, intact_keys)
+        del_keys(raw, intact_keys)
+        return _file
 
 class Attachment(ModelBase):
     id = PrimaryKeyField()
-    content = JSONField()
+    title = TextField(null=True)
+    text = TextField(null=True)
+    link = TextField(null=True)
+    from_url = TextField(null=True)
+    fallback = TextField(null=True)
+    raw = JSONField(null=True)
+
+    @classmethod
+    def _transform(cls, resp):
+        raw = resp.copy()
+        attachment = {
+          'link': resp.get('title_link', None),
+          'raw': raw
+        }
+        intact_keys = ['title', 'fallback', 'text', 'from_url']
+        copy_keys(attachment, raw, intact_keys)
+        # id always equal "1", not knowing its purpose
+        del_keys(raw, intact_keys + ['title_link', 'id'])
+        return attachment
 
 class DirectMessage(ModelBase):
     id = CharField(primary_key=True)
@@ -121,8 +162,6 @@ class DirectMessage(ModelBase):
 
 class ModelSlackMessageList(ModelBase):
     '''as a super class of channels and groups'''
-
-    id = SlackIDField(primary_key=True)
     name = CharField()
     created = DateTimeField()
     creator = ForeignKeyField(User)
@@ -130,6 +169,10 @@ class ModelSlackMessageList(ModelBase):
     topic = JSONField()
     purpose = JSONField()
     # latest = DateTimeField()
+
+    @property
+    def members(self):
+        return ChannelUser.select().where(ChannelUser.channel.id == self.id)
 
     @classmethod
     def getByID(cls, id):
@@ -139,6 +182,14 @@ class ModelSlackMessageList(ModelBase):
             return None
 
     @classmethod
+    def getByName(cls, name):
+        try:
+            return cls.get(cls.name == name)
+        except cls.DoesNotExist:
+            return None
+
+
+    @classmethod
     def _transform(cls, resp):
         msglist = {
             'archived': resp['is_archived']
@@ -146,25 +197,46 @@ class ModelSlackMessageList(ModelBase):
         return copy_keys(msglist, resp, ['id', 'name', 'created', 'creator', 'topic', 'purpose'])
 
 class Channel(ModelSlackMessageList):
-    pass
+    # looks like peewee can't inherit primary keys from super classes
+    id = SlackIDField(primary_key=True)
 
 class Group(ModelSlackMessageList):
-    pass
+    id = SlackIDField(primary_key=True)
 
 
 class Message(ModelBase):
-    id = SlackIDField(primary_key=True)
     channel = ForeignKeyField(Channel)
     # if null, message is the real message of a user
     #  otherwise it should be only a hint describing raw
     subtype = CharField(null=True)
-    message = TextField(null=True)
-    created = DateTimeField()
+    text = TextField(null=True)
+    ts = DateTimeField()
+    user = ForeignKeyField(User, null=True)
     file = ForeignKeyField(File, null=True)
     attachment = ForeignKeyField(Attachment, null=True)
     edit = JSONField(null=True)
     raw = JSONField(null=True)
     updated = DateTimeField(default=datetime.datetime.now)
+
+    @classmethod
+    def _transform(cls, resp):
+        raw = resp.copy()
+        message = {
+            'edit': raw.get('edited', None),
+            'raw': raw,
+            'attachment': raw.get('_attachment', None),
+            'file': raw.get('_file', None)
+        }
+        # todos:
+        #  fetching user is tricky when file is present
+        #  file/attachment detection
+        #  edit detection
+        intact_keys = ['channel', 'subtype', 'text', 'ts', 'user']
+        copy_keys(message, raw, intact_keys)
+        # this field is always 'message' if present
+        del_keys(raw, intact_keys + ['type', 'edited', '_attachment', '_file'])
+
+        return message
 
 class ChannelUser(ModelBase):
     channel = ForeignKeyField(Channel)
