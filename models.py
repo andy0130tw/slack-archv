@@ -262,6 +262,13 @@ class StarPrivate(ModelSlackStarList):
     class Meta:
         db_table = 'starPrivate'
 
+# Experimental feature on Slack
+class Reaction(ModelBase):
+    message = ForeignKeyField(Message)
+    reaction = CharField()
+    user = ForeignKeyField(User)
+
+
 def init_models():
     '''Create tables by model definitions.'''
     with db.atomic():
