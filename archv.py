@@ -54,20 +54,75 @@ def fetch_channel_list():
         #         link, created = m.ChannelUser.get_or_create(channel = insta, user = usrref)
 
 def fetch_channel_message(channel):
-    # Warning: Unfinished part.
-   '''' try:
-        chan = m.Channel.get(m.Channel.name == channel)
-    except m.Channel.DoesNotExist:
-        raise m.Channel.DoesNotExist('Channel \'{}\' does not exist.'.format(channel))
+    cnt = 0
+    has_more = True
+    # todo: try to get ts_latest from db
+    result = (m.Message.select(m.Message.ts)
+        .where(m.Message.channel == channel)
+        .order_by(m.Message.ts.desc())
+        .first())
 
-    try:
-        ts = m.Messages.select().where()
-    except m.Message.DoesNotExist:
-        raise
-    resp = slack.channels.history().body
-    # while resp['has_more']:
-    #    pass
-'''
+    ts_latest = None
+    ts_oldest = result.ts if result else None
+
+    with m.db.atomic():
+        while has_more:
+
+            resp = slack.channels.history(
+                oldest=ts_oldest,
+                latest=ts_latest,
+                count=1000,
+                channel=channel.id
+            ).body
+
+            msglist = resp['messages']
+            msglen = len(msglist)
+            cnt += msglen
+
+            # add channel information
+            for msg in msglist:
+                msg['channel'] = channel
+                # create files/attachments along the message
+                if 'file' in msg:
+                    msgfile = m.File.api(msg['file'])
+                    # I don't know why force_insert is required
+                    try:
+                        msgfile.save(force_insert=True)
+                    except:
+                        pass
+                    msg['_file'] = msgfile
+                    del msg['file']
+                if 'attachments' in msg:
+                    msgatt = m.Attachment.api(msg['attachments'][0])
+                    msgatt.save()
+                    msg['_attachment'] = msgatt
+                    del msg['attachments']
+
+            # don't insert all at once
+            # or it will raise `peewee.OperationalError: too many SQL variables`
+            insert_limit = 50
+            for idx in range(0, msglen, insert_limit):
+                m.Message.api_insert_many(msglist[idx:idx+insert_limit]).execute()
+
+            if msglen:
+                # the list is always sorted by ts desc
+                ts_latest = msglist[-1]['ts']
+
+            has_more = resp['has_more']
+
+    return cnt
+
+def fetch_all_channel_message():
+    lst = []
+    for chan in m.Channel.select().iterator():
+        # print(chan.name)
+        lst.append(chan)
+
+    for chan in lst:
+        cnt = fetch_channel_message(chan)
+        print('Fetched {:>4} messages from #{}'.format(cnt, chan.name))
+
+
 def init():
     with m.db.atomic():
         m.init_models()
@@ -99,6 +154,8 @@ def main():
     fetch_user_list()
     print('Fetching Channel list...')
     fetch_channel_list()
+    print('Fetching all messages from channels...')
+    fetch_all_channel_message()
 
 def test():
     with m.db.atomic():
