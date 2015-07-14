@@ -84,18 +84,11 @@ def fetch_channel_message(channel):
                 msg['channel'] = channel
                 # create files/attachments along the message
                 if 'file' in msg:
-                    msgfile = m.File.api(msg['file'])
-                    # I don't know why force_insert is required
-                    try:
-                        msgfile.save(force_insert=True)
-                    except:
-                        pass
+                    msgfile = m.File.api(msg['file'], True)
                     msg['_file'] = msgfile
                     del msg['file']
                 if 'attachments' in msg:
-                    msgatt = m.Attachment.api(msg['attachments'][0])
-                    msgatt.save()
-                    msg['_attachment'] = msgatt
+                    msgatt = m.Attachment.api(msg['attachments'][0], True)
                     del msg['attachments']
 
             # don't insert all at once
@@ -129,7 +122,7 @@ def init():
         # Add Slackbot to user list
         try:
             slackbot = slack.users.info(user='USLACKBOT').body['user']
-            m.User.api(slackbot).save()
+            m.User.api(slackbot, True)
         except peewee.IntegrityError:
             pass
 

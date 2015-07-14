@@ -1,5 +1,6 @@
 import json
 import datetime
+import re
 
 from peewee import *
 
@@ -30,6 +31,8 @@ class JSONField(TextField):
         return json.dumps(value, ensure_ascii=False)
 
     def python_value(self, value):
+        if value is None:
+            return None
         return json.loads(value)
 
 # class TimestampField(DateTimeField):
@@ -40,12 +43,17 @@ class ModelBase(Model):
     '''Super class for basic models'''
     # transform first upon creation
     @classmethod
-    def api(cls, resp):
+    def api(cls, resp, save=False):
         try:
             data = cls._transform(resp)
         except AttributeError:
             data = resp
-        return cls(**data)
+
+        if save:
+            model, _ = cls.create_or_get(**data)
+            return model
+        else:
+            return cls(**data)
 
     # transform first before bulk insertion
     @classmethod
@@ -83,6 +91,11 @@ class User(ModelBase):
     deleted = BooleanField(null=True)
     raw = JSONField(null=True)
 
+    INTACT_KEYS_1 = ['id', 'deleted', 'name', 'is_admin', 'is_owner', 'is_bot']
+    INTACT_KEYS_2 = ['email', 'skype', 'phone', 'title']
+    INTACT_KEYS_3 = ['first_name', 'last_name', 'real_name_normalized']
+    REMOVED_KEYS = INTACT_KEYS_1 + ['profile', 'tz', 'real_name']
+
     @classmethod
     def getByID(cls, id):
         try:
@@ -98,36 +111,82 @@ class User(ModelBase):
             'timezone': raw.get('tz', None),
             'realname': raw.get('real_name', None),
             'avatar': raw['profile'].get('image_original', raw['profile'].get('image_192', None)),
-            'avatar_data': {key: val for key, val in raw['profile'].items() if key.find('image_') == 0}
+            'avatar_data': {key: val for key, val in raw['profile'].items() if key.find('image_') == 0},
+            'raw': raw
         }
 
-        copy_keys(user, raw, ['id', 'deleted', 'name', 'is_admin', 'is_owner', 'is_bot'])
-        copy_keys(user, raw['profile'], ['email', 'skype', 'phone', 'title'])
-        copy_keys(user['name_data'], raw['profile'], ['first_name', 'last_name', 'real_name_normalized'])
+        copy_keys(user, raw, cls.INTACT_KEYS_1)
+        copy_keys(user, raw['profile'], cls.INTACT_KEYS_2)
+        copy_keys(user['name_data'], raw['profile'], cls.INTACT_KEYS_3)
 
         # todo: remove more used keys
-        del raw['profile']
-        user['raw'] = raw
+        del_keys(raw, cls.REMOVED_KEYS)
 
         return user
 
 class File(ModelBase):
     id = SlackIDField(primary_key=True)
     # todo: add more fields
+    title = TextField()
+    mode = CharField()
+    filetype = CharField()
+    mimetype = TextField()
     permalink = TextField()
+    url = TextField()
+    url_data = JSONField(null=True)
+    thumb_data = JSONField(null=True)
+    size = IntegerField()
+    is_external = BooleanField()
+    preview = TextField(null=True)
+    preview_highlight = TextField(null=True)
+    created = DateTimeField()
     raw = JSONField(null=True)
     content = BlobField(null=True)
+
+    REX_PERMALINK = re.compile(r'(?:https://[a-z0-9_]+\.slack\.com)?(.+)$')
+    REX_URL = re.compile(r'(?:https://slack-files\.com)?(.+)$')
+    INTACT_KEYS = [
+        'id', 'title', 'mode', 'filetype', 'mimetype', 'size', 'is_external',
+        'preview', 'preview_highlight', 'created'
+    ]
+    # 'permalink_public' can be accessed without permission! unsafe for archive.
+    REMOVED_KEYS = INTACT_KEYS + [
+        'permalink', 'url', 'permalink_public', 'is_starred',
+        'channels', 'ims', 'groups', 'pinned_to', 'initial_comment',
+        'num_starred', 'comments_count'
+    ]
 
     @classmethod
     def _transform(cls, resp):
         # unfinished part...
         raw = resp.copy()
         _file = {
-            'raw': raw
+            'raw': raw,
+            # strip out domain part of links
+            'permalink': re.sub(cls.REX_PERMALINK, r'\1', raw.get('permalink', '')),
+            'url': re.sub(cls.REX_URL, r'\1', raw.get('url', '')),
+            'url_data': {},
+            'thumb_data': {}
         }
-        intact_keys = ['id', 'permalink']
-        copy_keys(_file, raw, intact_keys)
-        del_keys(raw, intact_keys)
+
+        copy_keys(_file, raw, cls.INTACT_KEYS)
+        del_keys(raw, cls.REMOVED_KEYS)
+
+        # iterate over residue parameters
+        del_keys_more = []
+        for key, val in raw.items():
+            is_thumb_data = (key.find('thumb_') == 0)
+            is_url_data   = (key.find('url_')   == 0)
+            if is_thumb_data or is_url_data:
+                if isinstance(val, str):
+                    val = re.sub(cls.REX_URL, r'\1', val)
+                if is_thumb_data:
+                    _file['thumb_data'][key] = val
+                elif is_url_data:
+                    _file['url_data'][key] = val
+                del_keys_more.append(key)
+        del_keys(raw, del_keys_more)
+
         return _file
 
 class Attachment(ModelBase):
@@ -210,7 +269,7 @@ class Message(ModelBase):
     #  otherwise it should be only a hint describing raw
     subtype = CharField(null=True)
     text = TextField(null=True)
-    ts = DateTimeField()
+    ts = DateTimeField(index=True)
     user = ForeignKeyField(User, null=True)
     file = ForeignKeyField(File, null=True)
     attachment = ForeignKeyField(Attachment, null=True)
@@ -229,12 +288,25 @@ class Message(ModelBase):
         }
         # todos:
         #  fetching user is tricky when file is present
-        #  file/attachment detection
-        #  edit detection
+        #  bot user breaking foreign key
         intact_keys = ['channel', 'subtype', 'text', 'ts', 'user']
         copy_keys(message, raw, intact_keys)
-        # this field is always 'message' if present
-        del_keys(raw, intact_keys + ['type', 'edited', '_attachment', '_file'])
+
+        subtype = raw.get('subtype', '')
+        # *: do some small modifications to make the text more representative?
+        # if subtype == 'file_share':
+            # *: initial comment?
+            # message['text'] = raw['file']['initial_comment']['comment']
+            # del raw['file']['initial_comment']['comment']
+        if subtype == 'file_comment':
+            message['user'] = raw['comment']['user']
+            # *: real comment?
+            # message['text'] = raw['comment']['comment']
+            # del raw['comment']
+
+        # `type` field is always `'message'` if present
+        # `is_starred` field is private, do not insert it
+        del_keys(raw, intact_keys + ['type', 'edited', '_attachment', '_file', 'is_starred'])
 
         return message
 
