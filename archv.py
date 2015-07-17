@@ -24,15 +24,6 @@ def fetch_user_list():
         usrlist = slack.users.list().body['members']
         m.User.delete().execute()
         m.User.api_insert_many(usrlist).execute()
-        # for usr in usrlist:
-        #     # todo: use get_or_create instead
-        #     insta = m.User.getByID(usr['id'])
-        #     if insta:
-        #         print('User {} found. Updating....'.format(insta.name))
-        #         insta.delete_instance()
-        #     else:
-        #         print('Creating user {}'.format(usr['name']))
-        #     m.User.api(slack.users.info(usr['id']).body['user']).save()
 
 def fetch_channel_list():
     ''' This is a method updating channel list. '''
@@ -40,18 +31,6 @@ def fetch_channel_list():
     with m.db.atomic():
         m.Channel.delete().execute()
         m.Channel.api_insert_many(chanlist).execute()
-        # for chan in chanlist:
-        #     insta = m.Channel.getByID(chan['id']) or m.Channel.create(**chan)
-        #     insta.update_with_raw(raw = chan)
-
-        #     # Updating linking of Users and Channels.
-        #     for usr in chan['members']:
-        #         try:
-        #             usrref = m.User.get(m.User.id == usr)
-        #         except m.User.DoesNotExist:
-        #             m.User.api(slack.users.info(usr).body['user'])
-
-        #         link, created = m.ChannelUser.get_or_create(channel = insta, user = usrref)
 
 def fetch_channel_message(channel):
     cnt = 0
@@ -104,6 +83,19 @@ def fetch_channel_message(channel):
             has_more = resp['has_more']
 
     return cnt
+
+def fetch_file_comment(Fid):
+    cmlist = slack.files.info(Fid).body['comments']
+    print('Getting file comments for file %s' % Fid)
+    m.FileComment.api_insert_many(cmlist, Fid)
+
+def fetch_all_file_comment():
+    l = []
+    for f in m.File.select().iterator():
+        l.append(f.id)
+
+    for fid in l:
+        fetch_file_comment(fid)
 
 def fetch_all_channel_message():
     lst = []

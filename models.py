@@ -189,6 +189,35 @@ class File(ModelBase):
 
         return _file
 
+class FileComment(ModelBase):
+    id = SlackIDField(primary_key = True)
+    ts = DateTimeField(null = True)
+    file = ForeignKeyField(File, null = True)
+    user = ForeignKeyField(User, null = True)
+    text = TextField(null = True)
+
+    @classmethod
+    def _transform(cls, resp, Fid):
+        raw = resp.copy()
+        cm = {
+            'id': raw.get('id', None),
+            'ts': raw.get('timestamp', None),
+            'user': raw.get('user', None),
+            'text': raw.get('comment', None),
+            'file': Fid
+        }
+        return cm
+
+    @classmethod
+    def api_insert_many(cls, rows, fid):
+        try:
+            trans = cls._transform
+            new_rows = [ trans(row, Fid = fid) for row in rows ]
+        except AttributeError:
+            new_rows = rows
+        return cls.insert_many(new_rows)
+
+
 class Attachment(ModelBase):
     id = PrimaryKeyField()
     title = TextField(null=True)
@@ -355,7 +384,8 @@ def init_models():
             Group,
             ChannelUser,
             Star,
-            StarPrivate
+            StarPrivate,
+            FileComment
         ], safe=True)
 
 def table_clean():
