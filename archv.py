@@ -87,9 +87,12 @@ def fetch_channel_message(channel):
 def fetch_file_comment(Fid):
     # Warning: This thing is pretty dangerous, bug exists.
     cmlist = slack.files.info(Fid).body['comments']
-    with m.db.atomic():
-        m.FileComment.api_insert_many(cmlist, Fid).execute()
-    print('Fetched {:>4} messages from file {}'.format(len(cmlist), Fid))
+    if not cmlist:
+        pass
+    else:
+        with m.db.atomic():
+            m.FileComment.api_insert_many(cmlist, Fid).execute()
+        print('Fetched {:>4} messages from file {}'.format(len(cmlist), Fid))
 
 
 def fetch_all_file_comment():
