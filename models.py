@@ -192,7 +192,7 @@ class File(ModelBase):
 class FileComment(ModelBase):
     id = SlackIDField(primary_key = True)
     ts = DateTimeField(null = True)
-    file = ForeignKeyField(File, null = True)
+    File = ForeignKeyField(File, null = True)
     user = ForeignKeyField(User, null = True)
     text = TextField(null = True)
 
@@ -204,7 +204,7 @@ class FileComment(ModelBase):
             'ts': raw.get('timestamp', None),
             'user': raw.get('user', None),
             'text': raw.get('comment', None),
-            'file': Fid
+            'File': Fid
         }
         return cm
 
@@ -212,7 +212,8 @@ class FileComment(ModelBase):
     def api_insert_many(cls, rows, fid):
         try:
             trans = cls._transform
-            new_rows = [ trans(row, Fid = fid) for row in rows ]
+            new_rows = [ trans(row, fid) for row in rows ]
+            print(new_rows)
         except AttributeError:
             new_rows = rows
         return cls.insert_many(new_rows)
