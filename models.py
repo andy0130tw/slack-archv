@@ -213,7 +213,6 @@ class FileComment(ModelBase):
         try:
             trans = cls._transform
             new_rows = [ trans(row, fid) for row in rows ]
-            print(new_rows)
         except AttributeError:
             new_rows = rows
         return cls.insert_many(new_rows)
