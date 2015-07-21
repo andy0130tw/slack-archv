@@ -190,33 +190,24 @@ class File(ModelBase):
         return _file
 
 class FileComment(ModelBase):
-    id = SlackIDField(primary_key = True)
-    ts = DateTimeField(null = True)
-    file = ForeignKeyField(File, null = True)
-    user = ForeignKeyField(User, null = True)
-    text = TextField(null = True)
+    id = SlackIDField(primary_key=True)
+    file = ForeignKeyField(File)
+    ts = DateTimeField(null=True)
+    user = ForeignKeyField(User, null=True)
+    comment = TextField(null=True)
 
     @classmethod
-    def _transform(cls, resp, Fid):
+    def _transform(cls, resp):
         raw = resp.copy()
         cm = {
             'id': raw.get('id', None),
             'ts': raw.get('timestamp', None),
             'user': raw.get('user', None),
             'text': raw.get('comment', None),
-            'file': Fid
+            # todo
+            # 'file':
         }
         return cm
-
-    @classmethod
-    def api_insert_many(cls, rows, fid):
-        try:
-            trans = cls._transform
-            new_rows = [ trans(row, Fid = fid) for row in rows ]
-        except AttributeError:
-            new_rows = rows
-        return cls.insert_many(new_rows)
-
 
 class Attachment(ModelBase):
     id = PrimaryKeyField()
