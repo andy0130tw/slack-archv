@@ -288,6 +288,18 @@ class Channel(ModelSlackMessageList):
     # looks like peewee can't inherit primary keys from super classes
     id = SlackIDField(primary_key=True)
 
+    @classmethod
+    def _transform(cls, resp):
+        msglist = {
+            'archived': resp['is_archived']
+        }
+
+        # Create channel-user relationship for every channel
+        ChannelUser.insert_many([{'channel':resp['id'], 'user': member} for member in resp['members']]).execute()
+
+        return copy_keys(msglist, resp, ['id', 'name', 'created', 'creator', 'topic', 'purpose'])
+
+
 class Group(ModelSlackMessageList):
     id = SlackIDField(primary_key=True)
 

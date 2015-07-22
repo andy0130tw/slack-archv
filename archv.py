@@ -31,6 +31,7 @@ def fetch_channel_list():
     chanlist = slack.channels.list().body['channels']
     with m.db.atomic():
         m.Channel.delete().execute()
+        m.ChannelUser.delete().execute()
         m.Channel.api_insert_many(chanlist).execute()
 
 def fetch_channel_message(channel):
