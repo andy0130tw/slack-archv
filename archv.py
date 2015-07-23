@@ -75,14 +75,11 @@ def fetch_channel_message(channel):
                             msgfile.save()
                     elif subtype == 'file_comment':
                         comment = msg['comment']
-                    try:
-                        if comment is not None:
-                        # comment is deleted upon message model creation
-                        # so modify without cloning one
-                            comment['_file'] = msgfile
-                            m.FileComment.api(comment, True)
-                    except:
-                        print('error: file with unappropriate subtype: ' + subtype)
+                    if comment is not None:
+                    # comment is deleted upon message model creation
+                    # so modify without cloning one
+                        comment['_file'] = msgfile
+                        m.FileComment.api(comment, True)
                     del msg['file']
 
                 if 'attachments' in msg:
