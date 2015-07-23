@@ -65,7 +65,26 @@ def fetch_channel_message(channel):
                 if 'file' in msg:
                     msgfile = m.File.api(msg['file'], True)
                     msg['_file'] = msgfile
+                    # create file comments along the message
+                    subtype = msg.get('subtype', '')
+                    if subtype == 'file_share':
+                        if 'initial_comment' in msg['file']:
+                            comment = msg['file']['initial_comment']
+                            # update the field using simply id
+                            msgfile.initial_comment = comment['id']
+                            msgfile.save()
+                    elif subtype == 'file_comment':
+                        comment = msg['comment']
+                    try:
+                        if comment is not None:
+                        # comment is deleted upon message model creation
+                        # so modify without cloning one
+                            comment['_file'] = msgfile
+                            m.FileComment.api(comment, True)
+                    except:
+                        print('error: file with unappropriate subtype: ' + subtype)
                     del msg['file']
+
                 if 'attachments' in msg:
                     msgatt = m.Attachment.api(msg['attachments'][0], True)
                     del msg['attachments']
@@ -83,19 +102,6 @@ def fetch_channel_message(channel):
             has_more = resp['has_more']
 
     return cnt
-
-def fetch_file_comment(Fid):
-    cmlist = slack.files.info(Fid).body['comments']
-    print('Getting file comments for file %s' % Fid)
-    m.FileComment.api_insert_many(cmlist, Fid)
-
-def fetch_all_file_comment():
-    l = []
-    for f in m.File.select().iterator():
-        l.append(f.id)
-
-    for fid in l:
-        fetch_file_comment(fid)
 
 def fetch_all_channel_message():
     lst = []

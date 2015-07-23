@@ -124,6 +124,8 @@ class User(ModelBase):
 
         return user
 
+FileCommentProxy = Proxy()
+
 class File(ModelBase):
     id = SlackIDField(primary_key=True)
     # todo: add more fields
@@ -140,6 +142,7 @@ class File(ModelBase):
     preview = TextField(null=True)
     preview_highlight = TextField(null=True)
     created = DateTimeField()
+    initial_comment = ForeignKeyField(FileCommentProxy, null=True)
     raw = JSONField(null=True)
     content = BlobField(null=True)
 
@@ -150,10 +153,14 @@ class File(ModelBase):
         'preview', 'preview_highlight', 'created'
     ]
     # 'permalink_public' can be accessed without permission! unsafe for archive.
+    # 'timestamp' is mentioned in Slack API as follows:
+    #  > The timestamp property contains the same data as created,
+    #    but is deprecated and is provided only for backwards compatibility
+    #    with older clients.
     REMOVED_KEYS = INTACT_KEYS + [
         'permalink', 'url', 'permalink_public', 'is_starred',
-        'channels', 'ims', 'groups', 'pinned_to', 'initial_comment',
-        'num_starred', 'comments_count'
+        'channels', 'ims', 'groups', 'pinned_to',
+        'num_starred', 'comments_count', 'initial_comment', 'timestamp'
     ]
 
     @classmethod
@@ -192,22 +199,25 @@ class File(ModelBase):
 class FileComment(ModelBase):
     id = SlackIDField(primary_key=True)
     file = ForeignKeyField(File)
-    ts = DateTimeField(null=True)
+    created = DateTimeField(null=True)
     user = ForeignKeyField(User, null=True)
     comment = TextField(null=True)
 
+    INTACT_KEYS = ['id', 'created', 'user', 'comment']
+
     @classmethod
     def _transform(cls, resp):
-        raw = resp.copy()
-        cm = {
-            'id': raw.get('id', None),
-            'ts': raw.get('timestamp', None),
-            'user': raw.get('user', None),
-            'text': raw.get('comment', None),
-            # todo
-            # 'file':
+        # transforming from comment in message
+        comment = {
+            'file': resp.get('_file', None)
         }
-        return cm
+        copy_keys(comment, resp, cls.INTACT_KEYS)
+        return comment
+
+    class Meta:
+        db_table = 'fileComment'
+
+FileCommentProxy.initialize(FileComment)
 
 class Attachment(ModelBase):
     id = PrimaryKeyField()
@@ -297,6 +307,12 @@ class Message(ModelBase):
     raw = JSONField(null=True)
     updated = DateTimeField(default=datetime.datetime.now)
 
+    INTACT_KEYS = ['channel', 'subtype', 'text', 'ts', 'user']
+    REMOVED_KEYS = INTACT_KEYS + [
+        'type', 'edited', '_attachment', '_file', 'is_starred',
+        'comment'
+    ]
+
     @classmethod
     def _transform(cls, resp):
         raw = resp.copy()
@@ -309,8 +325,7 @@ class Message(ModelBase):
         # todos:
         #  fetching user is tricky when file is present
         #  bot user breaking foreign key
-        intact_keys = ['channel', 'subtype', 'text', 'ts', 'user']
-        copy_keys(message, raw, intact_keys)
+        copy_keys(message, raw, cls.INTACT_KEYS)
 
         subtype = raw.get('subtype', '')
         # *: do some small modifications to make the text more representative?
@@ -326,7 +341,7 @@ class Message(ModelBase):
 
         # `type` field is always `'message'` if present
         # `is_starred` field is private, do not insert it
-        del_keys(raw, intact_keys + ['type', 'edited', '_attachment', '_file', 'is_starred'])
+        del_keys(raw, cls.REMOVED_KEYS)
 
         return message
 
