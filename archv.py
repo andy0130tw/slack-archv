@@ -3,6 +3,7 @@ from pprint import PrettyPrinter
 # import sqlite3 as sqlite
 import slacker
 import peewee
+import algo
 
 import settings
 import models as m
@@ -30,6 +31,7 @@ def fetch_channel_list():
     chanlist = slack.channels.list().body['channels']
     with m.db.atomic():
         m.Channel.delete().execute()
+        m.ChannelUser.delete().execute()
         m.Channel.api_insert_many(chanlist).execute()
 
 def fetch_channel_message(channel):
@@ -84,18 +86,36 @@ def fetch_channel_message(channel):
 
     return cnt
 
-def fetch_file_comment(Fid):
+def fetch_file_comment(Fid, ts):
+    # Warning: This thing is pretty dangerous, bug exists.
     cmlist = slack.files.info(Fid).body['comments']
-    print('Getting file comments for file %s' % Fid)
-    m.FileComment.api_insert_many(cmlist, Fid)
+
+
+    if not cmlist:
+        print('Fetched {:>4} messages from file {}'.format(0, Fid))
+    elif cmlist[-1]['timestamp'] <= ts:
+        print('Fetched {:>4} messages from file {}'.format(0, Fid))
+    else:
+        idx = algo.ts_lower_bound(cmlist, ts)
+        cmlist = cmlist[idx:]
+        with m.db.atomic():
+            m.FileComment.api_insert_many(cmlist, Fid).execute()
+        print('Fetched {:>4} messages from file {}'.format(len(cmlist), Fid))
+
 
 def fetch_all_file_comment():
     l = []
     for f in m.File.select().iterator():
         l.append(f.id)
 
+    result = (m.FileComment.select(m.FileComment.ts)
+              .order_by(m.FileComment.ts.desc())
+              .first())
+
+    ts = result.ts if result else 0
+
     for fid in l:
-        fetch_file_comment(fid)
+        fetch_file_comment(fid, ts)
 
 def fetch_all_channel_message():
     lst = []
@@ -141,6 +161,10 @@ def main():
     fetch_channel_list()
     print('Fetching all messages from channels...')
     fetch_all_channel_message()
+    print('By default, we are not fetching file comments as it takes tons of time')
+    print('If you really want to, call function \'fetch_all_file_comment\'')
+#    print('Fetching all comments from files...')
+#    fetch_all_file_comment()
 
 def test():
     with m.db.atomic():

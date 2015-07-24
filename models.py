@@ -192,7 +192,7 @@ class File(ModelBase):
 class FileComment(ModelBase):
     id = SlackIDField(primary_key = True)
     ts = DateTimeField(null = True)
-    file = ForeignKeyField(File, null = True)
+    File = ForeignKeyField(File, null = True)
     user = ForeignKeyField(User, null = True)
     text = TextField(null = True)
 
@@ -204,7 +204,7 @@ class FileComment(ModelBase):
             'ts': raw.get('timestamp', None),
             'user': raw.get('user', None),
             'text': raw.get('comment', None),
-            'file': Fid
+            'File': Fid
         }
         return cm
 
@@ -212,7 +212,7 @@ class FileComment(ModelBase):
     def api_insert_many(cls, rows, fid):
         try:
             trans = cls._transform
-            new_rows = [ trans(row, Fid = fid) for row in rows ]
+            new_rows = [ trans(row, fid) for row in rows ]
         except AttributeError:
             new_rows = rows
         return cls.insert_many(new_rows)
@@ -287,6 +287,18 @@ class ModelSlackMessageList(ModelBase):
 class Channel(ModelSlackMessageList):
     # looks like peewee can't inherit primary keys from super classes
     id = SlackIDField(primary_key=True)
+
+    @classmethod
+    def _transform(cls, resp):
+        msglist = {
+            'archived': resp['is_archived']
+        }
+
+        # Create channel-user relationship for every channel
+        ChannelUser.insert_many([{'channel':resp['id'], 'user': member} for member in resp['members']]).execute()
+
+        return copy_keys(msglist, resp, ['id', 'name', 'created', 'creator', 'topic', 'purpose'])
+
 
 class Group(ModelSlackMessageList):
     id = SlackIDField(primary_key=True)
