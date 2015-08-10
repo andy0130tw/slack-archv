@@ -65,6 +65,17 @@ class ModelBase(Model):
             new_rows = rows
         return cls.insert_many(new_rows)
 
+    @classmethod
+    def api_bulk_insert(cls, rows):
+        ''' A dirty workaround.
+            Recommended way to do bulk insert with respect to field count, avoiding  `peewee.OperationalError: too many SQL variables`.
+            Note: No `.execute()` is needed.'''
+        # hack into meta data
+        # alt. way to do this is `m.User._meta.columns`
+        insert_limit = 999 // len(cls._meta.get_field_names())
+        for idx in range(0, len(rows), insert_limit):
+            cls.api_insert_many(rows[idx:idx+insert_limit]).execute()
+
     class Meta:
         database = db
 

@@ -3,7 +3,6 @@ from pprint import PrettyPrinter
 # import sqlite3 as sqlite
 import slacker
 import peewee
-import algo
 
 import settings
 import models as m
@@ -21,10 +20,10 @@ def assert_auth():
 def fetch_user_list():
     ''' This is a method to fetch user list.
         Clear the list first. '''
+    usrlist = slack.users.list().body['members']
     with m.db.atomic():
-        usrlist = slack.users.list().body['members']
         m.User.delete().execute()
-        m.User.api_insert_many(usrlist).execute()
+        m.User.api_bulk_insert(usrlist)
 
 def fetch_channel_list():
     ''' This is a method updating channel list. '''
@@ -32,7 +31,7 @@ def fetch_channel_list():
     with m.db.atomic():
         m.Channel.delete().execute()
         m.ChannelUser.delete().execute()
-        m.Channel.api_insert_many(chanlist).execute()
+        m.Channel.api_bulk_insert(chanlist)
 
 def fetch_channel_message(channel):
     cnt = 0
@@ -69,6 +68,7 @@ def fetch_channel_message(channel):
                     msg['_file'] = msgfile
                     # create file comments along the message
                     subtype = msg.get('subtype', '')
+                    comment = None
                     if subtype == 'file_share':
                         if 'initial_comment' in msg['file']:
                             comment = msg['file']['initial_comment']
@@ -78,21 +78,21 @@ def fetch_channel_message(channel):
                     elif subtype == 'file_comment':
                         comment = msg['comment']
                     if comment is not None:
-                    # comment is deleted upon message model creation
-                    # so modify without cloning one
+                        # comment is deleted upon message model creation
+                        # so modify without cloning one
                         comment['_file'] = msgfile
                         m.FileComment.api(comment, True)
                     del msg['file']
 
                 if 'attachments' in msg:
-                    msgatt = m.Attachment.api(msg['attachments'][0], True)
+                    # we store only the index of the first att. and assume that indexes att. are always in series.
+                    for att in msg['attachments']:
+                        msgatt = m.Attachment.api(att, True)
+                        if msg.get('_attachment', None) is None:
+                            msg['_attachment'] = msgatt
                     del msg['attachments']
 
-            # don't insert all at once
-            # or it will raise `peewee.OperationalError: too many SQL variables`
-            insert_limit = 50
-            for idx in range(0, msglen, insert_limit):
-                m.Message.api_insert_many(msglist[idx:idx+insert_limit]).execute()
+            m.Message.api_bulk_insert(msglist)
 
             if msglen:
                 # the list is always sorted by ts desc
@@ -116,6 +116,8 @@ def fetch_all_channel_message():
 def init():
     with m.db.atomic():
         m.init_models()
+        # Add version info
+        m.Information.create_or_get(key='__version', value='1.0.0')
         # Add Slackbot to user list
         try:
             slackbot = slack.users.info(user='USLACKBOT').body['user']
