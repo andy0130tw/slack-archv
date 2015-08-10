@@ -91,6 +91,12 @@ def fetch_channel_message(channel):
                         if msg.get('_attachment', None) is None:
                             msg['_attachment'] = msgatt
                     del msg['attachments']
+                if 'reactions' in msg:
+                    for r in msg['reactions']:
+                        m.Reaction.api_bulk_insert(
+                        [ { 'message': float(msg['ts']), 'reaction': r['name'], 'user': u } for u in r['users'] ]
+                        )
+                    del msg['reactions']
 
             m.Message.api_bulk_insert(msglist)
 
