@@ -112,6 +112,28 @@ def fetch_all_channel_message():
         cnt = fetch_channel_message(chan)
         print('Fetched {:>4} messages from #{}'.format(cnt, chan.name))
 
+def fetch_all_star_item():
+    lst = []
+    for usr in m.User.select():
+        lst.append(usr)
+
+    with m.db.atomic():
+        for usr in lst:
+            if usr.is_bot:  # `user_is_bot` error
+                continue
+            #todo: deal with paging
+            resp = slack.stars.list(user=usr.id).body
+            paging = resp['paging']
+            items = resp['items']
+            cnt = 0
+            for item in items:
+                if item['type'] not in ['channel', 'message', 'file', 'file_comment']:
+                    continue
+                item['user'] = usr.id
+                m.Star.api(item, True)
+                cnt+=1
+            print('Fetched {:>3} ({:>3}) starred items in @{}'.format(len(items), cnt, usr.name))
+
 
 def init():
     with m.db.atomic():
@@ -148,6 +170,8 @@ def main():
     fetch_channel_list()
     print('Fetching all messages from channels...')
     fetch_all_channel_message()
+    print('Fetching all starred items from users...') # Experimental
+    fetch_all_star_item()
 
 def test():
     with m.db.atomic():
