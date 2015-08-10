@@ -414,7 +414,8 @@ def init_models():
             ChannelUser,
             Star,
             StarPrivate,
-            FileComment
+            FileComment,
+            Reaction
         ], safe=True)
 
 def table_clean():
