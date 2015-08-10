@@ -88,7 +88,7 @@ def fetch_channel_message(channel):
                     # we store only the index of the first att. and assume that indexes att. are always in series.
                     for att in msg['attachments']:
                         msgatt = m.Attachment.api(att, True)
-                        if msg.get('_attachment', None) is None:
+                        if '_attachment' not in msg:
                             msg['_attachment'] = msgatt
                     del msg['attachments']
 
