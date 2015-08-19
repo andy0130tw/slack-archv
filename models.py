@@ -239,6 +239,9 @@ class Attachment(ModelBase):
     fallback = TextField(null=True)
     raw = JSONField(null=True)
 
+    INTACT_KEYS = ['title', 'fallback', 'text', 'from_url']
+    REMOVED_KEYS = ['title_link', 'id']
+
     @classmethod
     def _transform(cls, resp):
         raw = resp.copy()
@@ -246,10 +249,9 @@ class Attachment(ModelBase):
           'link': resp.get('title_link', None),
           'raw': raw
         }
-        intact_keys = ['title', 'fallback', 'text', 'from_url']
-        copy_keys(attachment, raw, intact_keys)
-        # id always equal "1", not knowing its purpose
-        del_keys(raw, intact_keys + ['title_link', 'id'])
+        copy_keys(attachment, raw, cls.INTACT_KEYS)
+        # id always equals to "1", not knowing its purpose
+        del_keys(raw, cls.INTACT_KEYS + cls.REMOVED_KEYS)
         return attachment
 
 class DirectMessage(ModelBase):

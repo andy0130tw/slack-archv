@@ -33,17 +33,59 @@ def fetch_channel_list():
         m.ChannelUser.delete().execute()
         m.Channel.api_bulk_insert(chanlist)
 
+def process_message(msg):
+    ''' This is a method modifying a message before insertion.
+        Create models of its type and get ids,
+        then prefix the original parameters with an underscore. '''
+    # create files/attachments along the message
+    if 'file' in msg:
+        msgfile = m.File.api(msg['file'], True)
+        msg['_file'] = msgfile
+        # create file comments along the message
+        subtype = msg.get('subtype', '')
+        comment = None
+        if subtype == 'file_share':
+            if 'initial_comment' in msg['file']:
+                comment = msg['file']['initial_comment']
+                # update the field using simply id
+                msgfile.initial_comment = comment['id']
+                msgfile.save()
+        elif subtype == 'file_comment':
+            comment = msg['comment']
+        if comment is not None:
+            # comment is deleted upon message model creation
+            # so modify without cloning one
+            comment['_file'] = msgfile
+            m.FileComment.api(comment, True)
+        del msg['file']
+
+    if 'attachments' in msg:
+        # we store only the index of the first att. and assume that indexes of att. are always in series.
+        for att in msg['attachments']:
+            msgatt = m.Attachment.api(att, True)
+            if '_attachment' not in msg:
+                msg['_attachment'] = msgatt
+        del msg['attachments']
+
+    if 'reactions' in msg:
+        for r in msg['reactions']:
+            m.Reaction.api_bulk_insert(
+            [ { 'message': float(msg['ts']), 'reaction': r['name'], 'user': u } for u in r['users'] ]
+            )
+        del msg['reactions']
+    return msg
+
 def fetch_channel_message(channel):
     cnt = 0
     has_more = True
-    # todo: try to get ts_latest from db
+
     result = (m.Message.select(m.Message.ts)
         .where(m.Message.channel == channel)
         .order_by(m.Message.ts.desc())
         .first())
 
     ts_latest = None
-    ts_oldest = result.ts if result else None
+    ts_oldest = '{:.6f}'.format(result.ts) if result else None
 
     with m.db.atomic():
         while has_more:
@@ -59,44 +101,10 @@ def fetch_channel_message(channel):
             msglen = len(msglist)
             cnt += msglen
 
-            # add channel information
             for msg in msglist:
+                # add channel information
                 msg['channel'] = channel
-                # create files/attachments along the message
-                if 'file' in msg:
-                    msgfile = m.File.api(msg['file'], True)
-                    msg['_file'] = msgfile
-                    # create file comments along the message
-                    subtype = msg.get('subtype', '')
-                    comment = None
-                    if subtype == 'file_share':
-                        if 'initial_comment' in msg['file']:
-                            comment = msg['file']['initial_comment']
-                            # update the field using simply id
-                            msgfile.initial_comment = comment['id']
-                            msgfile.save()
-                    elif subtype == 'file_comment':
-                        comment = msg['comment']
-                    if comment is not None:
-                        # comment is deleted upon message model creation
-                        # so modify without cloning one
-                        comment['_file'] = msgfile
-                        m.FileComment.api(comment, True)
-                    del msg['file']
-
-                if 'attachments' in msg:
-                    # we store only the index of the first att. and assume that indexes att. are always in series.
-                    for att in msg['attachments']:
-                        msgatt = m.Attachment.api(att, True)
-                        if '_attachment' not in msg:
-                            msg['_attachment'] = msgatt
-                    del msg['attachments']
-                if 'reactions' in msg:
-                    for r in msg['reactions']:
-                        m.Reaction.api_bulk_insert(
-                        [ { 'message': float(msg['ts']), 'reaction': r['name'], 'user': u } for u in r['users'] ]
-                        )
-                    del msg['reactions']
+                process_message(msg)
 
             m.Message.api_bulk_insert(msglist)
 
@@ -111,7 +119,6 @@ def fetch_channel_message(channel):
 def fetch_all_channel_message():
     lst = []
     for chan in m.Channel.select().iterator():
-        # print(chan.name)
         lst.append(chan)
 
     for chan in lst:
