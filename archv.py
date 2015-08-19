@@ -116,15 +116,81 @@ def fetch_channel_message(channel):
 
     return cnt
 
+def fetch_channel_message_diff(channel):
+    ''' FIXME: dirty workaround. DRY solution needed.
+        todo: update attachments as well. '''
+    list_mod = []
+    has_more = True
+
+    result = (m.Message.select(m.Message.ts)
+        .where(m.Message.channel == channel)
+        .order_by(m.Message.ts.desc())
+        .first())
+
+    # strange behavior
+    ts_latest = '{:.6f}'.format(float(result.ts) + 1) if result else None
+
+    with m.db.atomic():
+        while has_more:
+            resp = slack.channels.history(
+                latest=ts_latest,
+                count=1000,
+                channel=channel.id
+            ).body
+
+            msglist = resp['messages']
+
+            for msg in msglist:
+                # check for difference (status of edition).
+                msg_ori = (m.Message.select()
+                    .where(m.Message.channel == channel
+                        and m.Message.ts == msg['ts'])
+                    .first())
+                # check if they are exactly the same
+                # will msg_ori always exist?
+                if msg_ori and msg_ori.edit != msg.get('edited', None):
+                    # update, taking original id
+                    # FIXME: prevent duplicating objects
+                    msg['channel'] = channel
+                    process_message(msg)
+                    msg_new = m.Message.api(msg)
+                    msg_new.id = msg_ori.id
+                    msg_new.save()
+                    list_mod.append(msg_new)
+
+            if len(msglist):
+                # the list is always sorted by ts desc
+                ts_latest = msglist[-1]['ts']
+
+            has_more = resp['has_more']
+
+    return list_mod
+
 def fetch_all_channel_message():
     lst = []
     for chan in m.Channel.select().iterator():
         lst.append(chan)
 
-    for chan in lst:
-        cnt = fetch_channel_message(chan)
-        print('Fetched {:>4} messages from #{}'.format(cnt, chan.name))
+    cnt_ttl_add = 0
+    cnt_ttl = 0
 
+    _tmpl = '| {:21.21} | {:>4} | {:>7} | '
+    _hr = '+{0:-<23}+{0:-<6}+{0:-<9}+'.format('')
+
+    print(_hr)
+    print(_tmpl.format('CHANNEL', '+CNT', 'TOTAL'))
+    print(_hr)
+    for chan in lst:
+        cnt_add = fetch_channel_message(chan)
+        cnt_ttl_add += cnt_add
+        cnt_ttl += chan.length
+        # exprimental
+        # list_mod = fetch_channel_message_diff(chan)
+        # cnt_mod = len(list_mod)
+        print(_tmpl.format('#' + chan.name, cnt_add, chan.length))
+    print(_hr)
+    print(_tmpl.format('--- TOTAL ---', cnt_ttl_add, cnt_ttl))
+    print(_hr)
 
 def init():
     with m.db.atomic():

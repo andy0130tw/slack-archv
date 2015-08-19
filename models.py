@@ -302,6 +302,10 @@ class Channel(ModelSlackMessageList):
     # looks like peewee can't inherit primary keys from super classes
     id = SlackIDField(primary_key=True)
 
+    @property
+    def length(self):
+        return Message.select().where(Message.channel == self.id).count()
+
     @classmethod
     def _transform(cls, resp):
         msglist = {
