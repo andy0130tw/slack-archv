@@ -382,6 +382,9 @@ class ModelSlackStarList(ModelBase):
     # for StarPrivate only: im, group
     item_type = CharField()
     item_id = CharField()
+    permalink = TextField(null=True)
+
+    REX_PERMALINK = re.compile(r'(?:https://[a-z0-9_]+\.slack\.com)?(.+)$')
 
 class Star(ModelSlackStarList):
     @classmethod
@@ -397,8 +400,10 @@ class Star(ModelSlackStarList):
             # somehow strange; use the format of permalink
             # or search the exact item in DB?
             star['item_id'] = resp['channel'] + '/' + resp['message']['ts']
+            star['permalink'] = re.sub(cls.REX_PERMALINK, r'\1', resp['message']['permalink'])
         elif _type == 'file':
             star['item_id'] = resp['file']['id']
+            star['permalink'] = re.sub(cls.REX_PERMALINK, r'\1', resp['file']['permalink'])
         elif _type == 'file_comment':
             # including file id?
             star['item_id'] = resp['comment']['id']
