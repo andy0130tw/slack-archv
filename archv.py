@@ -213,24 +213,25 @@ def fetch_all_channel_message():
         lst.append(chan)
 
     cnt_ttl_add = 0
+    cnt_ttl_mod = 0
     cnt_ttl = 0
 
-    _tmpl = '| {:22.22} | {:>4} | {:>7} | '
-    _hr = '+{0:-<24}+{0:-<6}+{0:-<9}+'.format('')
+    _tmpl = '| {:22.22} | {:>4} | {:>4} | {:>7} |'
+    _hr = '+{0:-<24}+{0:-<6}+{0:-<6}+{0:-<9}+'.format('')
 
     print(_hr)
-    print(_tmpl.format('CHANNEL', '+CNT', 'TOTAL'))
+    print(_tmpl.format('CHANNEL', '+CNT', '~CNT', 'TOTAL'))
     print(_hr)
     for chan in lst:
         cnt_add = fetch_channel_message(chan)
         cnt_ttl_add += cnt_add
         cnt_ttl += chan.length
         # exprimental
-        # list_mod = fetch_channel_message_diff(chan)
-        # cnt_mod = len(list_mod)
-        print(_tmpl.format('#' + chan.name, cnt_add, chan.length))
+        list_mod = fetch_channel_message_diff(chan)
+        cnt_mod = len(list_mod)
+        print(_tmpl.format('#' + chan.name, cnt_add, cnt_mod, chan.length))
     print(_hr)
-    print(_tmpl.format('--- TOTAL ---', cnt_ttl_add, cnt_ttl))
+    print(_tmpl.format('--- TOTAL ---', cnt_ttl_add, cnt_mod, cnt_ttl))
     print(_hr)
 
 def fetch_all_star_item():
