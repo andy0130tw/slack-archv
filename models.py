@@ -17,7 +17,6 @@ def del_keys(d, args):
             del d[key]
     return d
 
-
 class SlackIDField(CharField):
     ''' Field for storing Slack-generated IDs, usually 9 digits.
         Expected to be primary keys '''
@@ -77,6 +76,11 @@ class ModelBase(Model):
         insert_limit = 999 // len(cls._meta.get_field_names())
         for idx in range(0, len(rows), insert_limit):
             cls.api_insert_many(rows[idx:idx+insert_limit]).execute()
+
+    REX_PERMALINK = re.compile(r'(?:https://[a-z0-9_]+\.slack\.com)?(.+)$')
+    @classmethod
+    def remove_permalink_domain(cls, url):
+        return cls.REX_PERMALINK.sub(r'\1', url)
 
     class Meta:
         database = db
@@ -159,8 +163,8 @@ class File(ModelBase):
     raw = JSONField(null=True)
     content = BlobField(null=True)
 
-    REX_PERMALINK = re.compile(r'(?:https://[a-z0-9_]+\.slack\.com)?(.+)$')
     REX_URL = re.compile(r'(?:https://slack-files\.com)?(.+)$')
+
     INTACT_KEYS = [
         'id', 'title', 'mode', 'filetype', 'mimetype', 'size', 'is_external',
         'preview', 'preview_highlight', 'created'
@@ -183,8 +187,8 @@ class File(ModelBase):
         _file = {
             'raw': raw,
             # strip out domain part of links
-            'permalink': re.sub(cls.REX_PERMALINK, r'\1', raw.get('permalink', '')),
-            'url': re.sub(cls.REX_URL, r'\1', raw.get('url', '')),
+            'permalink': cls.remove_permalink_domain(raw.get('permalink', '')),
+            'url': cls.REX_URL.sub(r'\1', raw.get('url', '')),
             'url_data': {},
             'thumb_data': {}
         }
@@ -292,7 +296,6 @@ class ModelSlackMessageList(ModelBase):
         except cls.DoesNotExist:
             return None
 
-
     @classmethod
     def _transform(cls, resp):
         msglist = {
@@ -390,8 +393,6 @@ class ModelSlackStarList(ModelBase):
     item_id = CharField()
     permalink = TextField(null=True)
 
-    REX_PERMALINK = re.compile(r'(?:https://[a-z0-9_]+\.slack\.com)?(.+)$')
-
     @staticmethod
     def isPublic(item_type):
         return item_type in ['channel', 'message', 'file', 'file_comment'];
@@ -410,10 +411,10 @@ class Star(ModelSlackStarList):
             # somehow strange; use the format of permalink
             # or search the exact item in DB?
             star['item_id'] = resp['channel'] + '/' + resp['message']['ts']
-            star['permalink'] = re.sub(cls.REX_PERMALINK, r'\1', resp['message']['permalink'])
+            star['permalink'] = cls.remove_permalink_domain(resp['message']['permalink'])
         elif _type == 'file':
             star['item_id'] = resp['file']['id']
-            star['permalink'] = re.sub(cls.REX_PERMALINK, r'\1', resp['file']['permalink'])
+            star['permalink'] = cls.remove_permalink_domain(resp['file']['permalink'])
         elif _type == 'file_comment':
             # including file id?
             star['item_id'] = resp['comment']['id']
@@ -425,6 +426,7 @@ class Star(ModelSlackStarList):
 class StarPrivate(ModelSlackStarList):
     # either im or group
     item_source = CharField()
+
     class Meta:
         db_table = 'starPrivate'
 
@@ -436,6 +438,17 @@ class Reaction(ModelBase):
     reaction = CharField()
     user = ForeignKeyField(User)
 
+class Emoji(ModelBase):
+    emoji = CharField(unique=True)
+    url = TextField()
+
+    @classmethod
+    def _transform(cls, resp):
+        # a tuple is expected as response
+        return {
+            'emoji': resp[0],
+            'url': cls.remove_permalink_domain(resp[1])
+        }
 
 def init_models():
     '''Create tables by model definitions.'''
@@ -453,7 +466,8 @@ def init_models():
             Star,
             StarPrivate,
             FileComment,
-            Reaction
+            Reaction,
+            Emoji
         ], safe=True)
 
 def table_clean():

@@ -33,6 +33,12 @@ def fetch_channel_list():
         m.ChannelUser.delete().execute()
         m.Channel.api_bulk_insert(chanlist)
 
+def fetch_emoji_list():
+    emolist = slack.emoji.list().body['emoji']
+    with m.db.atomic():
+        m.Emoji.delete().execute()
+        m.Emoji.api_bulk_insert(list(emolist.items()))
+
 def process_message(msg):
     ''' This is a method modifying a message before insertion.
         Create models of its type and get ids,
@@ -310,6 +316,8 @@ def main():
     fetch_user_list()
     print('Fetching Channel list...')
     fetch_channel_list()
+    print('Fetching Emoji list...')
+    fetch_emoji_list()
     print('Fetching all messages from channels...')
     fetch_all_channel_message()
     print('Fetching all starred items from users...')
