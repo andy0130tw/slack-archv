@@ -197,14 +197,23 @@ def fetch_all_star_item():
     for usr in m.User.select():
         lst.append(usr)
 
+    _tmpl = '| {:21.21} | {:>4} | {:>4} |'
+    _hr = '+{0:-<23}+{0:-<6}+{0:-<6}+'.format('')
+
     with m.db.atomic():
+        print(_hr)
+        print(_tmpl.format('USER', 'PREV', 'CNT'))
+        print(_hr)
+
+        cnt_ttl_prev = 0
+        cnt_ttl_now = 0
+
         for usr in lst:
             if usr.is_bot:  # `user_is_bot` error
                 continue
 
-            m.Star.delete().where(m.Star.user == usr).execute()
-
-            items = []
+            cnt_prev = m.Star.delete().where(m.Star.user == usr).execute()
+            cnt_ttl_prev += cnt_prev
 
             cnt = 0
             page_total = -1
@@ -216,7 +225,7 @@ def fetch_all_star_item():
                     page=page
                 ).body
                 page_total = resp['paging']['pages']
-                items += resp['items']
+                items = resp['items']
                 for item in items:
                     if not m.Star.isPublic(item['type']):
                         continue
@@ -225,7 +234,12 @@ def fetch_all_star_item():
                     cnt += 1
                 page += 1
 
-            print('Fetched {:>3} ({:>3}) starred items in @{}'.format(len(items), cnt, usr.name))
+            print(_tmpl.format('@' + usr.name, cnt_prev, cnt))
+            cnt_ttl_now += cnt
+
+        print(_hr)
+        print(_tmpl.format('--- TOTAL ---', cnt_ttl_prev, cnt_ttl_now))
+        print(_hr)
 
 
 def init():
