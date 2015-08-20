@@ -88,7 +88,7 @@ class Information(ModelBase):
 
 class User(ModelBase):
     id = SlackIDField(primary_key=True)
-    name = CharField(null=True)
+    name = CharField(null=True, unique=True)
     realname = CharField(null=True)
     name_data = JSONField(null=True)
     is_admin = BooleanField(null=True)
@@ -266,7 +266,7 @@ class DirectMessage(ModelBase):
 
 class ModelSlackMessageList(ModelBase):
     '''as a super class of channels and groups'''
-    name = CharField()
+    name = CharField(unique=True)
     created = DateTimeField()
     creator = ForeignKeyField(User)
     archived = BooleanField(null=True)
@@ -430,7 +430,9 @@ class StarPrivate(ModelSlackStarList):
 
 # Experimental feature on Slack
 class Reaction(ModelBase):
-    message = ForeignKeyField(Message)
+    item_type = CharField(null=True)
+    item_id = DateTimeField(index=True)
+    channel = ForeignKeyField(Channel, null=True)
     reaction = CharField()
     user = ForeignKeyField(User)
 
