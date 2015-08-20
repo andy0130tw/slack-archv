@@ -109,7 +109,7 @@ def insert_reactions(reactions, item_type='message', item_id=None, channel=None)
             } for u in r['users']
         ])
         if r['count'] != len(r['users']):
-            print('Warning: the reaction of channel #{} at ts={} is not saved completely.'.format(ts))
+            print('Warning: the reaction of channel #{} at ts={} is not saved completely.'.format(channel.id, ts))
 
 def fetch_channel_message(channel):
     cnt = 0
