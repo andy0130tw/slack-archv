@@ -120,7 +120,7 @@ def fetch_channel_message(channel):
         .order_by(m.Message.ts.desc())
         .first())
 
-    ts_latest = None
+    ts_latest = 1e10
     ts_oldest = '{:.6f}'.format(result.ts) if result else None
 
     with m.db.atomic():
@@ -165,6 +165,9 @@ def fetch_channel_message_diff(channel):
         .where(m.Message.channel == channel)
         .order_by(m.Message.ts.desc())
         .first())
+
+    if result is None:
+        return None
 
     # strange behavior
     ts_latest = '{:.6f}'.format(float(result.ts) + 1) if result else None
