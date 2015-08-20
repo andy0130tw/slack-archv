@@ -192,6 +192,42 @@ def fetch_all_channel_message():
     print(_tmpl.format('--- TOTAL ---', cnt_ttl_add, cnt_ttl))
     print(_hr)
 
+def fetch_all_star_item():
+    lst = []
+    for usr in m.User.select():
+        lst.append(usr)
+
+    with m.db.atomic():
+        for usr in lst:
+            if usr.is_bot:  # `user_is_bot` error
+                continue
+
+            m.Star.delete().where(m.Star.user == usr).execute()
+
+            items = []
+
+            cnt = 0
+            page_total = -1
+            page = 1
+            while page_total < 0 or page < page_total:
+                resp = slack.stars.list(
+                    user=usr.id,
+                    count=1000,
+                    page=page
+                ).body
+                page_total = resp['paging']['pages']
+                items += resp['items']
+                for item in items:
+                    if not m.Star.isPublic(item['type']):
+                        continue
+                    item['user'] = usr.id
+                    m.Star.api(item, True)
+                    cnt += 1
+                page += 1
+
+            print('Fetched {:>3} ({:>3}) starred items in @{}'.format(len(items), cnt, usr.name))
+
+
 def init():
     with m.db.atomic():
         m.init_models()
@@ -227,6 +263,8 @@ def main():
     fetch_channel_list()
     print('Fetching all messages from channels...')
     fetch_all_channel_message()
+    print('Fetching all starred items from users...') # Experimental
+    fetch_all_star_item()
 
 def test():
     with m.db.atomic():

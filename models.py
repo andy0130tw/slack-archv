@@ -388,9 +388,39 @@ class ModelSlackStarList(ModelBase):
     # for StarPrivate only: im, group
     item_type = CharField()
     item_id = CharField()
+    permalink = TextField(null=True)
+
+    REX_PERMALINK = re.compile(r'(?:https://[a-z0-9_]+\.slack\.com)?(.+)$')
+
+    @staticmethod
+    def isPublic(item_type):
+        return item_type in ['channel', 'message', 'file', 'file_comment'];
 
 class Star(ModelSlackStarList):
-    pass
+    @classmethod
+    def _transform(cls, resp):
+        _type = resp['type']
+        star = {
+            'user': resp['user'],
+            'item_type': _type
+        }
+        if _type == 'channel':
+            star['item_id'] = resp['channel']
+        elif _type == 'message':
+            # somehow strange; use the format of permalink
+            # or search the exact item in DB?
+            star['item_id'] = resp['channel'] + '/' + resp['message']['ts']
+            star['permalink'] = re.sub(cls.REX_PERMALINK, r'\1', resp['message']['permalink'])
+        elif _type == 'file':
+            star['item_id'] = resp['file']['id']
+            star['permalink'] = re.sub(cls.REX_PERMALINK, r'\1', resp['file']['permalink'])
+        elif _type == 'file_comment':
+            # including file id?
+            star['item_id'] = resp['comment']['id']
+        else:
+            # not recognized (or private) star
+            raise BaseException('Failed when creating Star model. Not recognized or private star list item.')
+        return star
 
 class StarPrivate(ModelSlackStarList):
     # either im or group
