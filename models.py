@@ -17,13 +17,14 @@ def del_keys(d, args):
             del d[key]
     return d
 
+
 class SlackIDField(CharField):
-    '''Field for storing Slack-generated IDs, usually 9 digits.
-        Expected to be primary keys'''
+    ''' Field for storing Slack-generated IDs, usually 9 digits.
+        Expected to be primary keys '''
     max_length = 9
 
 class JSONField(TextField):
-    '''Field for storing stringified-JSON'''
+    ''' Field for storing stringified-JSON '''
     def db_value(self, value):
         if ((isinstance(value, dict) or isinstance(value, list)) and len(value) == 0
             or value is None):
@@ -40,7 +41,7 @@ class JSONField(TextField):
 #     formats = '%Y-%m-%d %H:%M:%S.%f'
 
 class ModelBase(Model):
-    '''Super class for basic models'''
+    ''' Super class for basic models '''
     # transform first upon creation
     @classmethod
     def api(cls, resp, save=False):
@@ -68,8 +69,9 @@ class ModelBase(Model):
     @classmethod
     def api_bulk_insert(cls, rows):
         ''' A dirty workaround.
-            Recommended way to do bulk insert with respect to field count, avoiding  `peewee.OperationalError: too many SQL variables`.
-            Note: No `.execute()` is needed.'''
+            Recommended way to do bulk insert with respect to field count,
+            avoiding  `peewee.OperationalError: too many SQL variables`.
+            Note: No `.execute()` is needed. '''
         # hack into meta data
         # alt. way to do this is `m.User._meta.columns`
         insert_limit = 999 // len(cls._meta.get_field_names())
@@ -80,7 +82,7 @@ class ModelBase(Model):
         database = db
 
 class Information(ModelBase):
-    '''As a hash map of team information and metadata'''
+    ''' As a hash map of team information and metadata '''
     key = CharField(primary_key=True)
     value = CharField(null=True)
 
@@ -317,10 +319,8 @@ class Channel(ModelSlackMessageList):
 
         return copy_keys(msglist, resp, ['id', 'name', 'created', 'creator', 'topic', 'purpose'])
 
-
 class Group(ModelSlackMessageList):
     id = SlackIDField(primary_key=True)
-
 
 class Message(ModelBase):
     channel = ForeignKeyField(Channel)
