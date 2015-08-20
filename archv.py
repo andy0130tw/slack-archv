@@ -39,8 +39,13 @@ def process_message(msg):
         then prefix the original parameters with an underscore. '''
     # create files/attachments along the message
     if 'file' in msg:
+        if 'reactions' in msg['file']:
+            insert_reactions(msg['file']['reactions'], 'file', msg['file']['id'])
+            del msg['file']['reactions']
+
         msgfile = m.File.api(msg['file'], True)
         msg['_file'] = msgfile
+
         # create file comments along the message
         subtype = msg.get('subtype', '')
         comment = None
@@ -53,6 +58,10 @@ def process_message(msg):
         elif subtype == 'file_comment':
             comment = msg['comment']
         if comment is not None:
+            if 'reactions' in comment:
+                insert_reactions(comment['reactions'], 'file_comment', comment['id'])
+                del comment['reactions']
+
             # comment is deleted upon message model creation
             # so modify without cloning one
             comment['_file'] = msgfile
@@ -67,13 +76,34 @@ def process_message(msg):
                 msg['_attachment'] = msgatt
         del msg['attachments']
 
-    if 'reactions' in msg:
-        for r in msg['reactions']:
-            m.Reaction.api_bulk_insert(
-            [ { 'message': float(msg['ts']), 'reaction': r['name'], 'user': u } for u in r['users'] ]
-            )
-        del msg['reactions']
     return msg
+
+def insert_reactions(reactions, item_type='message', item_id=None, channel=None):
+    for r in reactions:
+        # clear original reactions at first
+        query = (m.Reaction.delete()
+            .where(m.Reaction.item_type == item_type
+                and m.Reaction.item_id == item_id))
+
+        if item_type == 'message':
+            query = query.where(m.Reaction.channel == channel)
+
+        query.execute()
+
+        # according to documentation, only a limited number of shown users is presented.
+        # requiring one more query to ensure.
+        # for now, we only show a warning.
+        m.Reaction.api_bulk_insert([
+            {
+                'item_type': item_type,
+                'channel': channel,
+                'item_id': item_id,
+                'reaction': r['name'],
+                'user': u
+            } for u in r['users']
+        ])
+        if r['count'] != len(r['users']):
+            print('Warning: the reaction of channel #{} at ts={} is not saved completely.'.format(ts))
 
 def fetch_channel_message(channel):
     cnt = 0
@@ -105,6 +135,9 @@ def fetch_channel_message(channel):
                 # add channel information
                 msg['channel'] = channel
                 process_message(msg)
+                if 'reactions' in msg:
+                    insert_reactions(msg['reactions'], 'message', msg['ts'], channel)
+                    del msg['reactions']
 
             m.Message.api_bulk_insert(msglist)
 
@@ -153,6 +186,8 @@ def fetch_channel_message_diff(channel):
                     # FIXME: prevent duplicating objects
                     msg['channel'] = channel
                     process_message(msg)
+                    if 'reactions' in msg:
+                        insert_reactions(msg['reactions'], 'message', msg['ts'], channel)
                     msg_new = m.Message.api(msg)
                     msg_new.id = msg_ori.id
                     msg_new.save()
@@ -277,7 +312,7 @@ def main():
     fetch_channel_list()
     print('Fetching all messages from channels...')
     fetch_all_channel_message()
-    print('Fetching all starred items from users...') # Experimental
+    print('Fetching all starred items from users...')
     fetch_all_star_item()
 
 def test():
