@@ -121,17 +121,30 @@ def fetch_all_star_item():
         for usr in lst:
             if usr.is_bot:  # `user_is_bot` error
                 continue
-            #todo: deal with paging
-            resp = slack.stars.list(user=usr.id).body
-            paging = resp['paging']
-            items = resp['items']
+
+            m.Star.delete().where(m.Star.user == usr).execute()
+
+            items = []
+
             cnt = 0
-            for item in items:
-                if item['type'] not in ['channel', 'message', 'file', 'file_comment']:
-                    continue
-                item['user'] = usr.id
-                m.Star.api(item, True)
-                cnt+=1
+            page_total = -1
+            page = 1
+            while page_total < 0 or page < page_total:
+                resp = slack.stars.list(
+                    user=usr.id,
+                    count=1000,
+                    page=page
+                ).body
+                page_total = resp['paging']['pages']
+                items += resp['items']
+                for item in items:
+                    if not m.Star.isPublic(item['type']):
+                        continue
+                    item['user'] = usr.id
+                    m.Star.api(item, True)
+                    cnt += 1
+                page += 1
+
             print('Fetched {:>3} ({:>3}) starred items in @{}'.format(len(items), cnt, usr.name))
 
 

@@ -386,6 +386,10 @@ class ModelSlackStarList(ModelBase):
 
     REX_PERMALINK = re.compile(r'(?:https://[a-z0-9_]+\.slack\.com)?(.+)$')
 
+    @staticmethod
+    def isPublic(item_type):
+        return item_type in ['channel', 'message', 'file', 'file_comment'];
+
 class Star(ModelSlackStarList):
     @classmethod
     def _transform(cls, resp):
