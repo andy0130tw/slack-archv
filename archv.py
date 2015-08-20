@@ -174,8 +174,8 @@ def fetch_all_channel_message():
     cnt_ttl_add = 0
     cnt_ttl = 0
 
-    _tmpl = '| {:21.21} | {:>4} | {:>7} | '
-    _hr = '+{0:-<23}+{0:-<6}+{0:-<9}+'.format('')
+    _tmpl = '| {:22.22} | {:>4} | {:>7} | '
+    _hr = '+{0:-<24}+{0:-<6}+{0:-<9}+'.format('')
 
     print(_hr)
     print(_tmpl.format('CHANNEL', '+CNT', 'TOTAL'))
@@ -197,8 +197,8 @@ def fetch_all_star_item():
     for usr in m.User.select():
         lst.append(usr)
 
-    _tmpl = '| {:21.21} | {:>4} | {:>4} |'
-    _hr = '+{0:-<23}+{0:-<6}+{0:-<6}+'.format('')
+    _tmpl = '| {:22.22} | {:>4} | {:>4} |'
+    _hr = '+{0:-<24}+{0:-<6}+{0:-<6}+'.format('')
 
     with m.db.atomic():
         print(_hr)
