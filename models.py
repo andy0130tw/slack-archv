@@ -4,7 +4,7 @@ import re
 
 from peewee import *
 
-db = SqliteDatabase('slack-archv-test.sqlite')
+db = SqliteDatabase(None)
 
 def copy_keys(a, b, args):
     for key in args:
