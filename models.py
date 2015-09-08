@@ -3,7 +3,7 @@ import datetime
 import re
 
 from peewee import *
-
+from playhouse.shortcuts import model_to_dict
 db = SqliteDatabase(None)
 
 def copy_keys(a, b, args):
@@ -81,6 +81,11 @@ class ModelBase(Model):
     @classmethod
     def remove_permalink_domain(cls, url):
         return cls.REX_PERMALINK.sub(r'\1', url)
+
+    def _dict(self, **kwargs):
+        # Experimental
+        kwargs['recurse'] = False
+        return model_to_dict(self, **kwargs)
 
     class Meta:
         database = db
@@ -307,6 +312,8 @@ class Channel(ModelSlackMessageList):
     # looks like peewee can't inherit primary keys from super classes
     id = SlackIDField(primary_key=True)
 
+    INTACT_KEYS = ['id', 'name', 'created', 'creator', 'topic', 'purpose']
+
     @property
     def length(self):
         return Message.select().where(Message.channel == self.id).count()
@@ -316,11 +323,7 @@ class Channel(ModelSlackMessageList):
         msglist = {
             'archived': resp['is_archived']
         }
-
-        # Create channel-user relationship for every channel
-        ChannelUser.insert_many([{'channel':resp['id'], 'user': member} for member in resp['members']]).execute()
-
-        return copy_keys(msglist, resp, ['id', 'name', 'created', 'creator', 'topic', 'purpose'])
+        return copy_keys(msglist, resp, cls.INTACT_KEYS)
 
 class Group(ModelSlackMessageList):
     id = SlackIDField(primary_key=True)
@@ -375,6 +378,11 @@ class Message(ModelBase):
         # `is_starred` field is private, do not insert it
         del_keys(raw, cls.REMOVED_KEYS)
 
+        return message
+
+    def _dict(self):
+        message = super()._dict()
+        del message['id']
         return message
 
 class ChannelUser(ModelBase):
@@ -451,7 +459,7 @@ class Emoji(ModelBase):
         }
 
 def init_models():
-    '''Create tables by model definitions.'''
+    ''' Create tables by model definitions. '''
     with db.atomic():
         db.create_tables([
             Information,
@@ -471,7 +479,7 @@ def init_models():
         ], safe=True)
 
 def table_clean():
-    '''Remove all temporary data to allow full update.'''
+    ''' Remove all temporary data to allow full update. '''
     with db.atomic():
-        for model in [User, Channel, Group, ChannelUser, DirectMessage]:
-            model.delete()
+        for model in [User, Channel, ChannelUser, Emoji]:
+            model.delete().execute()

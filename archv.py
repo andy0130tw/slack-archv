@@ -16,13 +16,28 @@ def assert_auth():
     except slacker.Error as err:
         print('Auth failed: ' + str(err))
 
+def save_team_metadata(auth_resp):
+    del auth_resp['ok']
+    # fixme: warn if user use a different database to backup
+    with m.db.atomic():
+        for prop in auth_resp:
+            meta, _ = m.Information.get_or_create(key=prop, defaults={'value': auth_resp[prop]})
+            if prop == 'team_id' and meta.value != auth_resp['team_id']:
+                print(' Warning: Team metadata is inconsistent. You may be corrupting a existing database!')
+                exit()
+
 def fetch_user_list():
-    ''' This is a method to fetch user list.
-        Clear the list first. '''
+    ''' This is a method to fetch user list. '''
     usrlist = slack.users.list().body['members']
     with m.db.atomic():
         m.User.delete().execute()
+
+        # Add Slackbot to user list
+        slackbot = slack.users.info(user='USLACKBOT').body['user']
+        m.User.api(slackbot, True)
+
         m.User.api_bulk_insert(usrlist)
+
 
 def fetch_channel_list():
     ''' This is a method updating channel list. '''
@@ -30,7 +45,13 @@ def fetch_channel_list():
     with m.db.atomic():
         m.Channel.delete().execute()
         m.ChannelUser.delete().execute()
-        m.Channel.api_bulk_insert(chanlist)
+        for chan in chanlist:
+            m.Channel.api(chan, True)
+            # Create channel-user relationship for every channel
+            chan_id = chan['id']
+            m.ChannelUser.api_bulk_insert([
+                {'channel':chan_id, 'user': member} for member in chan['members']
+            ])
 
 def fetch_emoji_list():
     emolist = slack.emoji.list().body['emoji']
@@ -233,7 +254,7 @@ def fetch_all_channel_message():
         cnt_mod = len(list_mod)
         print(_tmpl.format('#' + chan.name, cnt_add, cnt_mod, chan.length))
     print(_hr)
-    print(_tmpl.format('--- TOTAL ---', cnt_ttl_add, cnt_mod, cnt_ttl))
+    print(_tmpl.format('--- TOTAL ---', cnt_ttl_add, cnt_ttl_mod, cnt_ttl))
     print(_hr)
 
 def fetch_all_star_item():
@@ -294,12 +315,6 @@ def init():
         m.init_models()
         # Add version info
         m.Information.create_or_get(key='__version', value='1.0.0')
-        # Add Slackbot to user list
-        try:
-            slackbot = slack.users.info(user='USLACKBOT').body['user']
-            m.User.api(slackbot, True)
-        except peewee.IntegrityError:
-            pass
 
 def main():
     print('Fetching Authentication info...')
@@ -310,14 +325,7 @@ def main():
     init()
 
     print('Inserting team metadata...')
-    del auth_resp['ok']
-    # fixme: warn if user use a different database to backup
-    with m.db.atomic():
-        for prop in auth_resp:
-            meta, _ = m.Information.get_or_create(key=prop, defaults={'value': auth_resp[prop]})
-            if prop == 'team_id' and meta.value != auth_resp['team_id']:
-                print(' Warning: Team metadata is inconsistent. You may be corrupting a existing database!')
-                exit()
+    save_team_metadata(auth_resp)
 
     print('Fetching User list...')
     fetch_user_list()
