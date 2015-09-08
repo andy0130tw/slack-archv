@@ -311,12 +311,13 @@ def main():
 
     print('Inserting team metadata...')
     del auth_resp['ok']
-    # todo: warn if user use a different database to backup
+    # fixme: warn if user use a different database to backup
     with m.db.atomic():
         for prop in auth_resp:
-            meta, _ = m.Information.get_or_create(key=prop, value=auth_resp[prop])
+            meta, _ = m.Information.get_or_create(key=prop, defaults={'value': auth_resp[prop]})
             if prop == 'team_id' and meta.value != auth_resp['team_id']:
-                print(' Warning: Team ID is inconsistent.')
+                print(' Warning: Team metadata is inconsistent. You may be corrupting a existing database!')
+                exit()
 
     print('Fetching User list...')
     fetch_user_list()
