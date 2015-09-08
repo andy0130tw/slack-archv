@@ -288,7 +288,7 @@ def fetch_all_star_item():
 
 def init():
     # modify the name of the database here
-    m.db.init('slack-archv.test.sqlite')
+    m.db.init('slack-archv-test.sqlite')
 
     with m.db.atomic():
         m.init_models()
