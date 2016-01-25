@@ -33,8 +33,9 @@ def fetch_user_list():
         m.User.delete().execute()
 
         # Add Slackbot to user list
-        slackbot = slack.users.info(user='USLACKBOT').body['user']
-        m.User.api(slackbot, True)
+        # now Slack handles this officially
+        # slackbot = slack.users.info(user='USLACKBOT').body['user']
+        # m.User.api(slackbot, True)
 
         m.User.api_bulk_insert(usrlist)
 

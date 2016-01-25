@@ -73,19 +73,27 @@ class ModelBase(Model):
             Note: No `.execute()` is needed. '''
         # hack into meta data
         # alt. way to do this is `m.User._meta.columns`
-        insert_limit = 999 // len(cls._meta.get_field_names())
+        insert_limit = 999 // len(cls._meta.fields)
         for idx in range(0, len(rows), insert_limit):
             cls.api_insert_many(rows[idx:idx+insert_limit]).execute()
+
+    @classmethod
+    def getBy(cls, field_name, value):
+        ''' Get a single instance by a value of a field. '''
+        return cls.select().where(getattr(cls, field_name) == value).first()
 
     REX_PERMALINK = re.compile(r'(?:https://[a-z0-9_]+\.slack\.com)?(.+)$')
     @classmethod
     def remove_permalink_domain(cls, url):
         return cls.REX_PERMALINK.sub(r'\1', url)
 
-    def _dict(self, **kwargs):
+    def _dict(self, delete_empty=True, **kwargs):
         # Experimental
-        kwargs['recurse'] = False
-        return model_to_dict(self, **kwargs)
+        kwargs['recurse'] = kwargs.get('recurse', False)
+        d = model_to_dict(self, **kwargs)
+        if delete_empty:
+            d = { k: v for k, v in d.items() if v is not None }
+        return d
 
     class Meta:
         database = db
@@ -117,13 +125,6 @@ class User(ModelBase):
     INTACT_KEYS_2 = ['email', 'skype', 'phone', 'title']
     INTACT_KEYS_3 = ['first_name', 'last_name', 'real_name_normalized']
     REMOVED_KEYS = INTACT_KEYS_1 + ['profile', 'tz', 'real_name']
-
-    @classmethod
-    def getByID(cls, id):
-        try:
-            return cls.get(cls.id == id)
-        except cls.DoesNotExist:
-            return None
 
     @classmethod
     def _transform(cls, resp):
@@ -285,21 +286,7 @@ class ModelSlackMessageList(ModelBase):
 
     @property
     def members(self):
-        return ChannelUser.select().where(ChannelUser.channel.id == self.id)
-
-    @classmethod
-    def getByID(cls, id):
-        try:
-            return cls.get(cls.id == id)
-        except cls.DoesNotExist:
-            return None
-
-    @classmethod
-    def getByName(cls, name):
-        try:
-            return cls.get(cls.name == name)
-        except cls.DoesNotExist:
-            return None
+        return self.__class__.select().join(ChannelUser).where(ChannelUser.channel == self)
 
     @classmethod
     def _transform(cls, resp):
@@ -316,7 +303,7 @@ class Channel(ModelSlackMessageList):
 
     @property
     def length(self):
-        return Message.select().where(Message.channel == self.id).count()
+        return Message.select().where(Message.channel == self).count()
 
     @classmethod
     def _transform(cls, resp):
@@ -380,9 +367,17 @@ class Message(ModelBase):
 
         return message
 
-    def _dict(self):
-        message = super()._dict()
+    def _dict(self, merge_raw=False, **kwargs):
+        message = super()._dict(**kwargs)
         del message['id']
+        del message['updated']
+        if 'raw' in message:
+            if merge_raw:
+                message.update(message['raw'])
+            del message['raw']
+
+        # todo: file
+        # todo: comment
         return message
 
 class ChannelUser(ModelBase):
