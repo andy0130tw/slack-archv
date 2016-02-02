@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from pprint import PrettyPrinter
 
 import slacker
@@ -31,14 +33,7 @@ def fetch_user_list():
     usrlist = slack.users.list().body['members']
     with m.db.atomic():
         m.User.delete().execute()
-
-        # Add Slackbot to user list
-        # now Slack handles this officially
-        # slackbot = slack.users.info(user='USLACKBOT').body['user']
-        # m.User.api(slackbot, True)
-
         m.User.api_bulk_insert(usrlist)
-
 
 def fetch_channel_list():
     ''' This is a method updating channel list. '''
