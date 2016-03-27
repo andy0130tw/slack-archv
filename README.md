@@ -10,6 +10,16 @@ Current **v1.0.0 RC2**.
 
 The table schema can be considered stable, but the mechanism is not production-ready. And please be aware that there is currently no test suite. You can try making archives, but the correctness and integrity is not guaranteed.
 
+# Usage
+```
+# installing dependencies
+pip install -r requirements.txt
+# copying default settings, and editing it...
+cp settings.py.example settings.py
+# kick the things off
+python archv.py
+```
+
 # Features
 1. Written in pure Python!
 2. All history organized **in a single SQLite database** per team, including all the messages, files and attachments. (not including multiparty chats, user groups, and custom fields; some of which are only on paid plans so we cannot even try them out.)
