@@ -125,6 +125,7 @@ def insert_reactions(reactions, item_type='message', item_id=None, channel=None)
             } for u in r['users']
         ])
         if r['count'] != len(r['users']):
+            # TODO: emit another request to fetch all remaining reactions
             print('Warning: the reaction of channel #{} at ts={} is not saved completely.'.format(channel.id, ts))
 
 def fetch_channel_message(channel):
@@ -235,44 +236,38 @@ def fetch_all_channel_message():
     cnt_ttl_mod = 0
     cnt_ttl = 0
 
-    _tmpl = '| {:22.22} | {:>4} | {:>4} | {:>7} |'
-    _hr = '+{0:-<24}+{0:-<6}+{0:-<6}+{0:-<9}+'.format('')
+    _tmpl = '{:22.22}: +{:>4}, ~{:>4}, len={:>6}'
 
-    print(_hr)
-    print(_tmpl.format('CHANNEL', '+CNT', '~CNT', 'TOTAL'))
-    print(_hr)
-    for chan in lst:
-        cnt_add = fetch_channel_message(chan)
-        cnt_ttl_add += cnt_add
-        cnt_ttl += chan.length
-        # exprimental
-        list_mod = fetch_channel_message_diff(chan)
-        cnt_mod = len(list_mod)
-        print(_tmpl.format('#' + chan.name, cnt_add, cnt_mod, chan.length))
-    print(_hr)
+    for i, chan in enumerate(lst):
+        print('{}% [ Fetching #{}... ]'.format(i * 100 // len(lst), chan.name), end='', flush=True)
+        with m.db.atomic():
+            cnt_add = fetch_channel_message(chan)
+            cnt_ttl_add += cnt_add
+            cnt_ttl += chan.length
+            # exprimental
+            list_mod = fetch_channel_message_diff(chan)
+            cnt_mod = len(list_mod)
+        print('\r' + _tmpl.format('#' + chan.name, cnt_add, cnt_mod, chan.length))
+
+    print()
     print(_tmpl.format('--- TOTAL ---', cnt_ttl_add, cnt_ttl_mod, cnt_ttl))
-    print(_hr)
+    print()
 
 def fetch_all_star_item():
     lst = []
     for usr in m.User.select():
-        lst.append(usr)
+        if not usr.is_bot:  # `user_is_bot` error
+            lst.append(usr)
 
-    _tmpl = '| {:22.22} | {:>4} | {:>4} |'
-    _hr = '+{0:-<24}+{0:-<6}+{0:-<6}+'.format('')
+    _tmpl = '{:22.22}: {:>4} -> {:>4}'
 
-    with m.db.atomic():
-        print(_hr)
-        print(_tmpl.format('USER', 'PREV', 'CNT'))
-        print(_hr)
+    cnt_ttl_prev = 0
+    cnt_ttl_now = 0
 
-        cnt_ttl_prev = 0
-        cnt_ttl_now = 0
+    for i, usr in enumerate(lst):
+        print('{}% [ Fetching @{}... ]'.format(i * 100 // len(lst), usr.name), end='', flush=True)
 
-        for usr in lst:
-            if usr.is_bot:  # `user_is_bot` error
-                continue
-
+        with m.db.atomic():
             cnt_prev = m.Star.delete().where(m.Star.user == usr).execute()
             cnt_ttl_prev += cnt_prev
 
@@ -295,12 +290,12 @@ def fetch_all_star_item():
                     cnt += 1
                 page += 1
 
-            print(_tmpl.format('@' + usr.name, cnt_prev, cnt))
+            print('\r' + _tmpl.format('@' + usr.name, cnt_prev, cnt))
             cnt_ttl_now += cnt
 
-        print(_hr)
-        print(_tmpl.format('--- TOTAL ---', cnt_ttl_prev, cnt_ttl_now))
-        print(_hr)
+    print()
+    print(_tmpl.format('--- TOTAL ---', cnt_ttl_prev, cnt_ttl_now))
+    print()
 
 
 def init():
@@ -334,18 +329,5 @@ def main():
     print('Fetching all starred items from users...')
     fetch_all_star_item()
 
-def test():
-    with m.db.atomic():
-        usrlist = m.User.select()
-        print('Total # of User:', usrlist.count())
-        for usr in usrlist:
-            print(usr.name)
-
-        chanlist = m.Channel.select()
-        print('Total # of channels:', chanlist.count())
-        for chan in chanlist:
-            print(chan.name, ':', chan.creator.name)
-
 if __name__ == '__main__':
     main()
-    # test()
