@@ -268,6 +268,7 @@ def fetch_all_star_item():
         print('{}% [ Fetching @{}... ]'.format(i * 100 // len(lst), usr.name), end='', flush=True)
 
         with m.db.atomic():
+            # FIXME: use diff strategy
             cnt_prev = m.Star.delete().where(m.Star.user == usr).execute()
             cnt_ttl_prev += cnt_prev
 
@@ -326,8 +327,8 @@ def main():
     fetch_emoji_list()
     print('Fetching all messages from channels...')
     fetch_all_channel_message()
-    print('Fetching all starred items from users...')
-    fetch_all_star_item()
+    # print('Fetching all starred items from users...')
+    # fetch_all_star_item()
 
 if __name__ == '__main__':
     main()
